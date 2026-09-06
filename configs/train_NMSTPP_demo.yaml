@@ -1,0 +1,42 @@
+# OpenStarLab Event Modeling, Apache-2.0 license
+# UEID data (with openstarlab-preprocessing package) and NMSTPP model
+
+
+# Training parameters
+train_path: C:/Users/maxwe/ds340w-data/train_demo.csv                                       # Subset (60 matches) for the screen recording
+valid_path: C:/Users/maxwe/ds340w-data/valid_demo.csv                                       # Subset (10 matches) for the screen recording
+save_path: ./results/demo                                                                  # Path to save the training results
+test: False                                                                               # Full run (not the truncated debug mode)
+num_epoch: 2                                                                              # Short run for the screen recording
+print_freq: 1
+early_stop_patience: 3
+dataloader_num_worker: 4
+device: None                                                                              #when None, device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') 
+
+# Input features
+basic_features: ['action', 'delta_T', 'start_x','start_y'] 
+other_features: ['team','home_team','success','seconds','deltaX','deltaY','distance','dist2goal','angle2goal','home_score','away_score']
+use_other_features: True
+num_actions: 9 
+seq_len: 1
+
+# Model Hyperparameters (use all lists for optuna or all value for specified hyperparameters)
+optuna: False
+optuna_n_trials: 100
+
+learning_rate: 0.01
+eps: 1e-16
+batch_size: 256
+
+action_embedding_out_len: 9 #num_actions
+scale_grad_by_freq: True
+continuous_embedding_output_len: 14 #len(features)-1
+
+multihead_attention: 1 #fix to 1 given the previous papers
+hidden_dim: 1024
+feature_embedding_output_len: 21 #len(features)-1 + action_embedding_out_len
+
+NN_deltaT_num_layers: 1
+NN_location_num_layers: 1
+NN_action_num_layers: 2
+

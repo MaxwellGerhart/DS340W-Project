@@ -1,0 +1,28 @@
+{
+    "min_dict": {
+        "seconds": 0.0811,
+        "start_x": 0.0,
+        "start_y": 0.0,
+        "deltaX": -100.0,
+        "deltaY": -100.0,
+        "distance": 0.0,
+        "dist2goal": 0.0,
+        "angle2goal": 0.5,
+        "home_score": 0.0,
+        "away_score": 0.0,
+        "delta_T": -13.815510557964274
+    },
+    "max_dict": {
+        "seconds": 7076.779,
+        "start_x": 68.0,
+        "start_y": 105.0,
+        "deltaX": 99.0,
+        "deltaY": 100.0,
+        "distance": 125.096,
+        "dist2goal": 110.3676,
+        "angle2goal": 3.1416,
+        "home_score": 7.0,
+        "away_score": 5.0,
+        "delta_T": 6.347332992664306
+    }
+}

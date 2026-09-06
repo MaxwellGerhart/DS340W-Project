@@ -5,3 +5,10 @@ event/sports/soccer/models/run.sh
 event/sports/soccer/models/model_yaml_test
 openstarlab_event.egg-info/
 dist/
+# Local data + outputs (do not commit - hundreds of MB)
+data/
+*.csv
+!event/sports/soccer/examples/simulation_loss.csv
+!results/**
+/out/
+.venv/
