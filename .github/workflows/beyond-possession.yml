@@ -1,0 +1,29 @@
+name: Beyond Possession tests
+on:
+  push:
+    paths:
+      - 'beyond-possession/**'
+      - '.github/workflows/beyond-possession.yml'
+  pull_request:
+    paths:
+      - 'beyond-possession/**'
+      - '.github/workflows/beyond-possession.yml'
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12', '3.13', '3.14']
+    defaults:
+      run:
+        working-directory: beyond-possession
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s tests -v
+      - run: python -m beyond_possession analyze --output artifacts/smoke
+
