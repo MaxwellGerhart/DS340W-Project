@@ -1,0 +1,8 @@
+{
+  "match_id": "demo-001",
+  "synthetic": true,
+  "seed": 42,
+  "event_coordinates": "possession-oriented, attacking +x, scale 0..100",
+  "tracking_coordinates": "home-attacks-+x throughout, scale 0..100",
+  "warning": "Generated fixtures, not real match observations."
+}
