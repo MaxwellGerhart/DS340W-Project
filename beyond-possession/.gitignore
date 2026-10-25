@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+.DS_Store
+artifacts/
+data/raw/
+data/private/
+*.sqlite
+*.sqlite3
+*.db
+*.log
+.pytest_cache/
+.coverage
+build/
+dist/
+*.egg-info/
+
+# Per-machine downloaded AI runtime and weights
+.local-ai/
+
+# Public catalogue is stored compressed; local expanded copy stays local.
+data/real/combined_matches.json

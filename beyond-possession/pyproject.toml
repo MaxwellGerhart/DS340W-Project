@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "beyond-possession"
+version = "0.1.0"
+description = "Evidence-first soccer tactical analysis and multi-agent research experiments"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+beyond-possession = "beyond_possession.__main__:main"
+
+[tool.setuptools.package-data]
+beyond_possession = ["static/*.html", "static/*.css", "static/*.js"]
+
+[tool.setuptools.packages.find]
+include = ["beyond_possession*"]
+exclude = ["tests*", "data*", "docs*", "examples*"]
