@@ -1,0 +1,66 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "debugpy",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "name": "Run dashboard",
+      "program": "${workspaceFolder}/run.py"
+    },
+    {
+      "type": "debugpy",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "name": "Run dashboard without AI downloads",
+      "program": "${workspaceFolder}/run.py",
+      "args": [
+        "--no-ai"
+      ]
+    },
+    {
+      "type": "debugpy",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "name": "Export demo report",
+      "module": "beyond_possession",
+      "args": [
+        "analyze",
+        "--output",
+        "artifacts/demo"
+      ]
+    },
+    {
+      "type": "debugpy",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "name": "Combine the seven match datasets",
+      "module": "beyond_possession",
+      "args": [
+        "combine",
+        "--input-dir",
+        "${workspaceFolder}/data/raw"
+      ]
+    },
+    {
+      "type": "debugpy",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "name": "Run with local Ollama instead of API",
+      "program": "${workspaceFolder}/run.py",
+      "args": [
+        "--local-ai"
+      ]
+    }
+  ]
+}

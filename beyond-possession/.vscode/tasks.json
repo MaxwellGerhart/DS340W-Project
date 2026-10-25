@@ -1,0 +1,82 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start dashboard",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "run.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Run tests",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-v"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Combine datasets",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "-m",
+        "beyond_possession",
+        "combine",
+        "--input-dir",
+        "data/raw"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Export demo report",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "-m",
+        "beyond_possession",
+        "analyze",
+        "--output",
+        "artifacts/demo"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    }
+  ]
+}
