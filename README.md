@@ -92,3 +92,18 @@ version 2.4.0 linux pip python3.8 cuda12.1
     </tr>
   </tbody>
 </table>
+
+
+## Beyond Possession tactical-analysis app
+
+The companion research dashboard is in [`beyond-possession/`](beyond-possession/). It includes evidence-based tactical analytics, a 1,941-match catalogue, optional local Ollama or Groq API analysts, CSV/JSON event uploads, and comparison experiments.
+
+Open `beyond-possession/Beyond-Possession.code-workspace` in VS Code, or run:
+
+```bash
+cd beyond-possession
+python run.py
+```
+
+Python 3.11+ is required. Local AI setup downloads its runtime/model on the first run. To run without downloads or API calls, use `python run.py --no-ai`. For hosted AI, copy `.env.example` to `.env` and supply your own key. See the [app README](beyond-possession/README.md) for configuration and data limitations.
+
