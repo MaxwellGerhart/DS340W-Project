@@ -40,9 +40,9 @@ Weights are a research hypothesis. They are accepted by the Python API through `
 
 ## Spatial methods
 
-An 18 by 12 grid assigns each cell to the nearest player using physical pitch-scaled Euclidean distance. Ties contribute 0.5. Overall control is the mean assignment; central control is averaged in the selected team's central attacking third. Interval metrics average all snapshots; the dashboard surface shows the middle snapshot, explicitly labeled with its time.
+An 18 by 12 grid computes the nearest player on each team using physical pitch-scaled Euclidean distance. Each cell now uses a smooth weight: sigmoid((opponent distance - own distance) / 3 meters). Ties contribute 0.5 and the two teams' weights sum to one. This reduces abrupt cell flips caused by tiny position changes near a boundary. The 3 meter scale is an uncalibrated starting setting. Overall control is the mean weight; central control is averaged in the selected team's central attacking third. Interval metrics average all snapshots; the dashboard surface shows the middle snapshot, explicitly labeled with its time. `control_surface(..., method='nearest')` retains the original binary proxy for comparison. Reports record the spatial method and scale.
 
-This is a Voronoi proxy, not a reproduction of a published probabilistic pitch-control model. It does not use ball arrival, acceleration, reaction time, velocity, or goalkeeper influence parameters. Width/depth summarize outfield geometry across all phases, not phase-conditioned defensive organization.
+This is a soft distance-based proxy, not a reproduction of a published probabilistic pitch-control model. It does not use ball arrival, acceleration, reaction time, velocity, or goalkeeper influence parameters. Reduced boundary jitter does not establish better tactical accuracy; that requires validation with real tracking data. Width/depth summarize outfield geometry across all phases, not phase-conditioned defensive organization.
 
 ## Evidence and verification
 

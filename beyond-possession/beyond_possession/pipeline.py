@@ -16,13 +16,14 @@ def analyze(rows, tracking=None, *, system='multi', backend='offline', seed=42, 
     result=run_agents(summary,system,backend,seed,model_backend)
     sha=fingerprint(rows,tracking)
     config={'system':system,'backend':backend,'seed':seed,'window_minutes':window_minutes,
-            'weights':summary['tci_weights'],'model':result['model'],'version':__version__}
+            'weights':summary['tci_weights'],'model':result['model'],'version':__version__,
+            'spatial_model':summary['spatial_model']}
     return {'schema_version':'1.0','created_at':datetime.now(timezone.utc).isoformat(),
         'run_id':hashlib.sha256((sha+json.dumps(config,sort_keys=True)).encode()).hexdigest()[:16],
         'data_sha256':sha,'config':config,'summary':summary,'analysis':result,
         'limitations':['Synthetic matches demonstrate software behavior only; they cannot establish research findings.',
           'Action share is not time-based possession. TCI is an unvalidated event proxy.',
-          'Tracking estimates use nearest-player geometry, not calibrated arrival-time pitch control.',
+          'Tracking estimates use smooth distance-based geometry with a 3 m transition scale, not calibrated arrival-time pitch control.',
           'No confidence intervals are computed: adjacent observations are dependent.',
           'No causal claims, inferred fatigue, or passing-lane availability are supported.',
           'Automatic checks measure structural/numeric faithfulness; experts must assess tactical validity.']}

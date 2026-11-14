@@ -17,6 +17,14 @@ function timeline(){
  for(let m=0;m<=s.duration_seconds/60;m+=15){let x=40+m*60/s.duration_seconds*570;content+=`<text x="${x}" y="262" text-anchor="middle" fill="#91a28e" font-size="10">${m}′</text>`;}
  $('timeline').innerHTML=svg(content,640,280);$('legend-home').textContent=s.teams[0];$('legend-away').textContent=s.teams[1];
 }
+function spatialColor(value){
+ const p=Math.max(0,Math.min(1,value));
+ const from=p<.5?[230,168,131]:[221,221,221];
+ const to=p<.5?[221,221,221]:[212,237,136];
+ const blend=p<.5?p*2:(p-.5)*2;
+ return `rgb(${from.map((channel,i)=>Math.round(channel+(to[i]-channel)*blend)).join(',')})`;
+}
+
 function render(){
  if(!current)return;let s=current.summary,a=current.analysis,team=$('team').value,start=Number($('interval').value);
  const w=s.windows.find(w=>w.team===team&&w.start===start);if(!w)return;
@@ -29,8 +37,8 @@ function render(){
  let points=net.nodes.map(n=>`<circle cx="${10+n.x*6.2}" cy="${400-n.y*3.9}" r="${Math.min(15,5+Math.sqrt(n.received))}" fill="#d4ed88" stroke="#17211b" stroke-width="2"><title>${esc(n.id)} · ${n.received} received</title></circle><text x="${10+n.x*6.2}" y="${384-n.y*3.9}" text-anchor="middle" fill="#edf2e7" font-size="10">${esc(n.id)}</text>`).join('');
  $('network').innerHTML=net.nodes.length?pitch(lines+points):'<p class="empty">No completed pass connections in this interval.</p>';
  $('network-label').textContent=net.nodes.length+' OBSERVED PLAYERS';
- $('surface').innerHTML=w.surface.length?pitch(w.surface.map(c=>`<rect x="${c.x*6.4-640/36}" y="${410-c.y*4.1-410/24}" width="${640/18}" height="${410/12}" fill="${c.control===1?'#d4ed88':c.control===0?'#e6a883':'#ddd'}" opacity=".4"><title>Control: ${c.control}</title></rect>`).join('')):'<p class="empty">Tracking unavailable.<br>Spatial control and team compactness require full-team snapshots.</p>';
- $('surface-note').textContent=w.surface.length?`Representative snapshot at ${(w.snapshot_time/60).toFixed(1)} minutes. Lime: selected team. Peach: opponent. Snapshot uses home-attacks-right coordinates. Summary metrics average ${w.n_frames} snapshots.`:'No spatial metrics are inferred from event locations.';
+ $('surface').innerHTML=w.surface.length?pitch(w.surface.map(c=>`<rect x="${c.x*6.4-640/36}" y="${410-c.y*4.1-410/24}" width="${640/18}" height="${410/12}" fill="${spatialColor(c.control)}" opacity=".4"><title>Spatial-control weight: ${(c.control*100).toFixed(1)}%</title></rect>`).join('')):'<p class="empty">Tracking unavailable.<br>Spatial control and team compactness require full-team snapshots.</p>';
+ $('surface-note').textContent=w.surface.length?`Representative snapshot at ${(w.snapshot_time/60).toFixed(1)} minutes. Lime: selected team. Peach: opponent. Blended cells show closely contested space. Snapshot uses home-attacks-right coordinates. Summary metrics average ${w.n_frames} snapshots.`:'No spatial metrics are inferred from event locations.';
  let claims=a.claims.filter(c=>c.evidence.team===team&&c.evidence.start===start);
  $('claim-count').textContent=claims.length+' FINDINGS IN THIS INTERVAL';
  $('patterns').innerHTML=(s.patterns||[]).filter(p=>p.team===team&&p.start===start).map(p=>`<article class="claim"><div class="claim-role">Calculated comparison</div><div><p>${esc(p.text)}</p><small>${esc(p.warning)} Evidence: ${esc(p.evidence_ids.join(', '))}</small></div></article>`).join('');

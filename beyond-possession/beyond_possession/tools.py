@@ -17,7 +17,7 @@ class MatchTools:
 
     def calculate_pitch_control(self,team,start_minute,end_minute):
         w=self._window(team,start_minute,end_minute)
-        return {'method':'nearest-player Voronoi proxy, not calibrated pitch control',
+        return {'method':'soft distance-based control, 3 m transition scale; not calibrated pitch control',
                 'available':bool(w['n_frames']),'surface':w['surface'],'n_frames':w['n_frames'],
                 'spatial_control':w['metrics'].get('spatial_control'),'central_control':w['metrics'].get('central_control')}
 

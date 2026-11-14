@@ -1,5 +1,6 @@
 import copy
 import json
+import math
 import sqlite3
 from contextlib import closing
 import tempfile
@@ -53,6 +54,28 @@ class AnalyticTests(unittest.TestCase):
         frame=self.frames[0]
         a=control_surface(frame,frame['home_team']);b=control_surface(frame,frame['away_team'])
         self.assertTrue(all(x['control']+y['control']==1 for x,y in zip(a,b)))
+    def test_soft_control_reduces_boundary_jitter(self):
+        def score(offset, method):
+            frame={'players':[{'team':'A','x':49+offset,'y':50},
+                              {'team':'B','x':51,'y':50}]}
+            return control_surface(frame,'A',1,1,method=method)[0]['control']
+        old_change=abs(score(.001,'nearest')-score(-.001,'nearest'))
+        new_change=abs(score(.001,'distance_logistic')-score(-.001,'distance_logistic'))
+        self.assertEqual(old_change,1)
+        self.assertLess(new_change,.001)
+        self.assertEqual(score(0,'distance_logistic'),.5)
+    def test_soft_control_favors_closer_team_and_stays_bounded(self):
+        frame={'players':[{'team':'A','x':50,'y':50},
+                          {'team':'B','x':53,'y':50}]}
+        value=control_surface(frame,'A',1,1)[0]['control']
+        self.assertAlmostEqual(value,1/(1+math.exp(-1.05)))
+        self.assertTrue(all(0<=c['control']<=1 for c in control_surface(self.frames[0],self.frames[0]['home_team'])))
+        for bad in [0,-1,float('nan')]:
+            with self.assertRaises(ValueError):control_surface(frame,'A',softness_m=bad)
+    def test_spatial_method_is_recorded_in_report(self):
+        report=analyze(self.rows,self.frames)
+        self.assertEqual(report['config']['spatial_model'],report['summary']['spatial_model'])
+        self.assertEqual(report['config']['spatial_model']['method'],'distance_logistic')
     def test_tci_formula_and_sparse_null(self):
         w=window_metrics(self.rows,self.frames,self.rows[0]['team'],0,900)
         m=w['metrics']

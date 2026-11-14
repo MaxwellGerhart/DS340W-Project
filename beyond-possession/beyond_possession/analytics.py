@@ -6,6 +6,7 @@ from .data import ACTIONS
 
 WEIGHTS = {'territory_share': .30, 'progressive_pass_rate': .25,
            'completion_rate': .20, 'shot_share': .25}
+SPATIAL_MODEL = {'method': 'distance_logistic', 'softness_m': 3.0, 'calibrated': False}
 METRIC_DEFS = {
  'action_share': 'Share of recorded on-ball actions; NOT possession time.',
  'territory_share': 'Share of both teams\' on-ball actions starting at x >= 66.667 in their attacking coordinates.',
@@ -17,15 +18,25 @@ METRIC_DEFS = {
  'hub_share': 'Largest share of completed passes received by one player.',
  'pressure_per100': 'Pressure events / opponent pass attempts, multiplied by 100; NOT PPDA.',
  'recovery_high_rate': 'Recoveries at x >= 66.667 / all recoveries.',
- 'spatial_control': 'Fraction of grid points nearest to this team, averaged across full snapshots; NOT calibrated pitch control.',
- 'central_control': 'Nearest-player control in central attacking third: x >= 66.667, y in [33.333,66.667].',
+ 'spatial_control': 'Mean soft distance-based control weight across grid points and snapshots; 3 m transition scale, NOT calibrated pitch control.',
+ 'central_control': 'Soft distance-based control in central attacking third: x >= 66.667, y in [33.333,66.667].',
  'defensive_width_m': 'Mean lateral range of outfield players in meters across snapshots; goalkeeper excluded by nearest-own-goal heuristic.',
  'defensive_depth_m': 'Mean longitudinal range of outfield players in meters across snapshots; goalkeeper excluded by nearest-own-goal heuristic.'}
 
 def ratio(a,b):
     return a/b if b else None
 
-def control_surface(frame, team, nx=18, ny=12):
+def control_surface(frame, team, nx=18, ny=12, *, method='distance_logistic', softness_m=3.0):
+    """Smooth contested cells using the nearest-player distance gap in meters.
+
+    A tiny position change near a boundary should produce a tiny score change.
+    Keep method='nearest' available for comparison with the original proxy.
+    The soft weights express geometry, not measured ball-winning probabilities.
+    """
+    if method not in {'distance_logistic', 'nearest'}:
+        raise ValueError('Unknown spatial-control method.')
+    if not isinstance(softness_m, (int, float)) or not math.isfinite(softness_m) or softness_m <= 0:
+        raise ValueError('Spatial softness must be a finite positive distance in meters.')
     own=[p for p in frame['players'] if p['team']==team]
     other=[p for p in frame['players'] if p['team']!=team]
     surface=[]
@@ -34,7 +45,13 @@ def control_surface(frame, team, nx=18, ny=12):
             x,y=(ix+.5)*100/nx,(iy+.5)*100/ny
             distance=lambda p: ((p['x']-x)*1.05)**2+((p['y']-y)*.68)**2
             da,db=min(map(distance,own)),min(map(distance,other))
-            value=0.5 if math.isclose(da,db,abs_tol=1e-8) else float(da<db)
+            if method == 'nearest':
+                value=0.5 if math.isclose(da,db,abs_tol=1e-8) else float(da<db)
+            else:
+                gap=(math.sqrt(db)-math.sqrt(da))/softness_m
+                # Stable sigmoid; complementary teams use exactly p and 1-p.
+                favored=1/(1+math.exp(-abs(gap)))
+                value=favored if gap>=0 else 1-favored
             surface.append({'x':x,'y':y,'control':value})
     return surface
 
@@ -161,4 +178,4 @@ def summarize(rows, frames=None, window_minutes=15, weights=None):
     return {'match_id':rows[0]['match_id'],'teams':teams,'duration_seconds':duration,
             'window_minutes':window_minutes,'windows':windows,'change_points':changes,'patterns':patterns,
             'tci_weights':weights or WEIGHTS,'metric_definitions':METRIC_DEFS,
-            'tracking_available':bool(frames)}
+            'tracking_available':bool(frames),'spatial_model':dict(SPATIAL_MODEL)}

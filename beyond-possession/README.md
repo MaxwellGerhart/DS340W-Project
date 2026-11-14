@@ -213,7 +213,7 @@ beyond_possession/
 
 ## Research boundaries
 
-TCI is an unvalidated event proxy, not an established scientific measure. Action share is not possession time. Spatial estimates use static nearest-player geometry, not velocities, reaction time, arrival probability, or a calibrated pitch-control model. Width/depth are not conditioned on defensive phases, so the dashboard calls them geometry rather than proven defensive quality. Adjacent-window threshold changes are exploratory, not statistical change-point inference. No calibrated confidence scores, bootstrap intervals, fatigue estimates, causal effects, passing-lane visibility, GNNs, or player simulations are claimed.
+TCI is an unvalidated event proxy, not an established scientific measure. Action share is not possession time. Spatial estimates now use a smooth function of each team's nearest-player distance, with a 3 meter transition scale to reduce abrupt boundary flips. They do not use velocities, reaction time, arrival probability, or a calibrated pitch-control model. Width/depth are not conditioned on defensive phases, so the dashboard calls them geometry rather than proven defensive quality. Adjacent-window threshold changes are exploratory, not statistical change-point inference. No calibrated confidence scores, bootstrap intervals, fatigue estimates, causal effects, passing-lane visibility, GNNs, or player simulations are claimed.
 
 See [RESEARCH_PLAN.md](docs/RESEARCH_PLAN.md) and [TEAM_HANDOFF.md](docs/TEAM_HANDOFF.md) for the next work.
 
