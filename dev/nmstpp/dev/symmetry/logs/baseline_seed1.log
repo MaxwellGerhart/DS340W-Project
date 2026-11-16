@@ -1,0 +1,25 @@
+  NOTE  : positional-encoding fix ACTIVE (event/ itself is unmodified)
+  data ready in 30s: train 2,142,893 | valid 267,199 | test 267,000
+  arm baseline | seed 1 | params 16,121 | pe-fix True
+  epoch  1 15563s | train 5.8501 | valid 4.6968 * | acc 0.6638 | F1 0.1644 | F1g 0.1649 | dT 3.180 | x 7.181 | y 15.709
+  epoch  2   281s | train 4.7933 | valid 4.6707 * | acc 0.6648 | F1 0.1698 | F1g 0.1723 | dT 3.135 | x 6.799 | y 15.754
+  epoch  3   275s | train 4.7491 | valid 4.6877   | acc 0.6661 | F1 0.1648 | F1g 0.1654 | dT 3.194 | x 6.797 | y 16.498
+  epoch  4   273s | train 4.7230 | valid 4.7294   | acc 0.6657 | F1 0.1694 | F1g 0.1720 | dT 3.282 | x 6.897 | y 16.652
+  epoch  5   281s | train 4.7034 | valid 4.7420   | acc 0.6627 | F1 0.1903 | F1g 0.1947 | dT 3.306 | x 7.498 | y 16.224
+  epoch  6   275s | train 4.6882 | valid 4.6966   | acc 0.6676 | F1 0.1786 | F1g 0.1802 | dT 3.355 | x 8.026 | y 15.268
+  epoch  7   276s | train 4.6767 | valid 4.6214 * | acc 0.6690 | F1 0.1772 | F1g 0.1785 | dT 3.122 | x 7.566 | y 15.094
+  epoch  8   275s | train 4.6671 | valid 4.5605 * | acc 0.6712 | F1 0.1797 | F1g 0.1837 | dT 3.182 | x 6.645 | y 14.981
+  epoch  9   274s | train 4.6574 | valid 4.5628   | acc 0.6707 | F1 0.1673 | F1g 0.1679 | dT 3.160 | x 6.769 | y 15.163
+  epoch 10   274s | train 4.6539 | valid 4.7680   | acc 0.6659 | F1 0.1658 | F1g 0.1670 | dT 3.277 | x 8.641 | y 15.018
+  epoch 11   281s | train 4.6474 | valid 4.6132   | acc 0.6647 | F1 0.1741 | F1g 0.1766 | dT 3.151 | x 7.109 | y 15.122
+  epoch 12   290s | train 4.6425 | valid 4.5301 * | acc 0.6703 | F1 0.1926 | F1g 0.1991 | dT 3.194 | x 6.793 | y 15.042
+  epoch 13   297s | train 4.6395 | valid 4.5591   | acc 0.6685 | F1 0.1837 | F1g 0.1882 | dT 3.148 | x 6.697 | y 14.850
+  epoch 14   296s | train 4.6369 | valid 4.5466   | acc 0.6716 | F1 0.1703 | F1g 0.1728 | dT 3.202 | x 6.683 | y 14.837
+  epoch 15   305s | train 4.6317 | valid 4.5523   | acc 0.6713 | F1 0.1743 | F1g 0.1778 | dT 3.149 | x 6.669 | y 15.087
+  epoch 16   296s | train 4.6298 | valid 4.6022   | acc 0.6710 | F1 0.1721 | F1g 0.1753 | dT 3.173 | x 6.544 | y 15.901
+  epoch 17 32369s | train 4.6264 | valid 4.5325   | acc 0.6706 | F1 0.1827 | F1g 0.1871 | dT 3.194 | x 6.573 | y 14.734
+  early stop: no improvement for 5 epochs
+  best epoch 12 | test: acc 0.6689 | F1 0.1920 | F1g 0.1994 | dT 3.219 | x 6.766 | y 15.070
+  test, frame-averaged at inference: acc 0.6683 | F1 0.1871 | F1g 0.1924 | dT 3.220 | x 6.702 | y 14.744
+  equivariance gap: y_gap_m 4.644 | x_gap_m 2.204 | dt_gap_s 0.2053 | action_flip 0.04131 | action_tv 0.04054
+  written: ./results/symmetry\baseline_seed1  (871.5 min total)

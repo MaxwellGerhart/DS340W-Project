@@ -1,0 +1,61 @@
+# OpenStarLab Event Modeling, Apache-2.0 license
+# UEID data (with openstarlab-preprocessing package) and NMSTPP model
+#
+# Base file: event/sports/soccer/examples/train_NMSTPP.yaml (authors', unmodified).
+# That example already carries the paper's Appendix A feature list (9 other_features,
+# continuous_embedding_output_len 12); the copy under models/model_yaml/ adds
+# home_score/away_score, which is what inflated the parameter count in the earlier run.
+#
+# Deviations from the base file, all to match Appendix A of the paper:
+#   seq_len              1 -> 40   (Appendix A; p.16 "NMSTPP ... used 40 previous events")
+#   early_stop_patience  3 -> 5    (Appendix A)
+#   print_freq           1 -> 10   (Appendix A)
+#   test              True -> False (do not use the package's truncated debug mode)
+#   hidden_dim        1024 -> 256  (recovered, see below)
+#
+# Appendix A sets optuna: True with 100 trials over hidden_dim [16,256,512,1024,2048];
+# the paper reports 3-4 days per model on an RTX 3090 for that search, so the search is
+# not repeated here. The winning value is recoverable from the complexity columns the
+# paper reports for NMSTPP/Wyscout (Table 6: 296M FLOPs, 121K params). Only hidden_dim
+# 256 reproduces them, and it does so exactly:
+#     hidden_dim 1024 -> FLOPs 956,579,336 | params 154,145
+#     hidden_dim  256 -> FLOPs 295,976,456 | params 121,121   <- matches Table 6
+# The remaining hyperparameters are fixed at the authors' non-optuna defaults.
+
+# Training parameters
+train_path: ./data/train.csv                                                              # Path to the train set
+valid_path: ./data/valid.csv                                                              # Path to the valid set
+save_path: ./results/paper_seqlen40                                                       # Path to save the training results
+test: False
+num_epoch: 50
+print_freq: 10
+early_stop_patience: 5
+dataloader_num_worker: 4
+device: None                                                                              #when None, device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+# Input features
+basic_features: ['action', 'delta_T', 'start_x','start_y']
+other_features: ['team','home_team','success','seconds','deltaX','deltaY','distance','dist2goal','angle2goal']
+use_other_features: True
+num_actions: 9
+seq_len: 40
+
+# Model Hyperparameters (use all lists for optuna or all value for specified hyperparameters)
+optuna: False
+optuna_n_trials: 100
+
+learning_rate: 0.01
+eps: 1e-16
+batch_size: 256
+
+action_embedding_out_len: 9 #num_actions
+scale_grad_by_freq: True
+continuous_embedding_output_len: 12 #len(features)-1
+
+multihead_attention: 1 #fix to 1 given the previous papers
+hidden_dim: 256
+feature_embedding_output_len: 21 #len(features)-1 + action_embedding_out_len
+
+NN_deltaT_num_layers: 1
+NN_location_num_layers: 1
+NN_action_num_layers: 2

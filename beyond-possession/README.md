@@ -278,4 +278,4 @@ An HTTP 429 does not necessarily mean your daily free allowance is gone. It can 
 
 ## Location in the team repository
 
-This app lives under `beyond-possession/` alongside the existing OpenSTARLab reproduction. Open `beyond-possession/Beyond-Possession.code-workspace` in VS Code, or run `cd beyond-possession` then `python run.py`. The original reproduction remains at the repository root. The shipped match catalogue is gzip-compressed and read automatically.
+This app lives under `beyond-possession/` alongside the existing OpenSTARLab reproduction. Open `beyond-possession/Beyond-Possession.code-workspace` in VS Code, or run `cd beyond-possession` then `python run.py`. The early OpenSTARLab reproduction is in `dev/nmstpp/`. The shipped match catalogue is gzip-compressed and read automatically.

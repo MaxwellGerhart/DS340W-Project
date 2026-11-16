@@ -1,0 +1,11 @@
+# Everything needed to run the README steps.
+torch
+numpy
+pandas
+pyyaml
+tqdm
+scipy
+matplotlib
+matplotsoccer
+optuna
+torchprofile

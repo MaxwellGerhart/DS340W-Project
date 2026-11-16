@@ -1,0 +1,18 @@
+  NOTE  : positional-encoding fix ACTIVE (event/ itself is unmodified)
+  data ready in 30s: train 2,142,893 | valid 267,199 | test 267,000
+  arm frameavg | seed 1 | params 16,121 | pe-fix True
+  epoch  1 15673s | train 5.0472 | valid 4.8383 * | acc 0.6613 | F1 0.1689 | F1g 0.1719 | dT 3.102 | x 8.766 | y 16.015
+  epoch  2   389s | train 4.7377 | valid 4.6206 * | acc 0.6657 | F1 0.1649 | F1g 0.1657 | dT 3.236 | x 6.710 | y 15.065
+  epoch  3   377s | train 4.6961 | valid 4.7103   | acc 0.6670 | F1 0.1649 | F1g 0.1656 | dT 3.253 | x 7.903 | y 15.092
+  epoch  4   388s | train 4.6712 | valid 4.6431   | acc 0.6676 | F1 0.1704 | F1g 0.1733 | dT 3.259 | x 6.984 | y 15.018
+  epoch  5   379s | train 4.6583 | valid 4.7162   | acc 0.6651 | F1 0.1955 | F1g 0.2014 | dT 3.281 | x 8.136 | y 15.121
+  epoch  6   385s | train 4.6433 | valid 4.5704 * | acc 0.6671 | F1 0.1830 | F1g 0.1844 | dT 3.269 | x 6.982 | y 14.785
+  epoch  7   383s | train 4.6349 | valid 4.6485   | acc 0.6697 | F1 0.1660 | F1g 0.1668 | dT 3.183 | x 7.112 | y 14.967
+  epoch  8   393s | train 4.6299 | valid 4.6584   | acc 0.6706 | F1 0.1659 | F1g 0.1665 | dT 3.231 | x 8.117 | y 14.903
+  epoch  9   406s | train 4.6214 | valid 4.5791   | acc 0.6687 | F1 0.1653 | F1g 0.1660 | dT 3.294 | x 6.748 | y 14.903
+  epoch 10   414s | train 4.6182 | valid 4.5719   | acc 0.6682 | F1 0.1934 | F1g 0.2003 | dT 3.321 | x 6.677 | y 14.679
+  epoch 11   426s | train 4.6130 | valid 4.6346   | acc 0.6721 | F1 0.1754 | F1g 0.1792 | dT 3.254 | x 7.829 | y 15.025
+  early stop: no improvement for 5 epochs
+  best epoch 6 | test: acc 0.6663 | F1 0.1835 | F1g 0.1849 | dT 3.294 | x 6.987 | y 14.805
+  equivariance gap: y_gap_m 2.263e-06 | x_gap_m 2.256e-07 | dt_gap_s 4.461e-08 | action_flip 0 | action_tv 8.271e-09
+  written: ./results/symmetry\frameavg_seed1  (328.7 min total)

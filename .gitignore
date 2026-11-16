@@ -1,14 +1,5 @@
 __pycache__/
-test/
-event/sports/soccer/utils/test_f1.py
-event/sports/soccer/models/run.sh
-event/sports/soccer/models/model_yaml_test
-openstarlab_event.egg-info/
-dist/
-# Local data + outputs (do not commit - hundreds of MB)
-data/
-*.csv
-!event/sports/soccer/examples/simulation_loss.csv
-!results/**
-/out/
 .venv/
+
+# Rebuilt from the split files by dev/datasets/combine_matches.py
+/dev/datasets/combined/

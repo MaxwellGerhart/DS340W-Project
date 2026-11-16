@@ -1,0 +1,58 @@
+{
+  "seed": 42,
+  "ratios": {
+    "training": 0.7,
+    "test": 0.2,
+    "validation": 0.1
+  },
+  "files": {
+    "matches_England.json": {
+      "source": 380,
+      "training": 266,
+      "test": 76,
+      "validation": 38
+    },
+    "matches_European_Championship.json": {
+      "source": 51,
+      "training": 36,
+      "test": 10,
+      "validation": 5
+    },
+    "matches_France.json": {
+      "source": 380,
+      "training": 266,
+      "test": 76,
+      "validation": 38
+    },
+    "matches_Germany.json": {
+      "source": 306,
+      "training": 214,
+      "test": 61,
+      "validation": 31
+    },
+    "matches_Italy.json": {
+      "source": 380,
+      "training": 266,
+      "test": 76,
+      "validation": 38
+    },
+    "matches_Spain.json": {
+      "source": 380,
+      "training": 266,
+      "test": 76,
+      "validation": 38
+    },
+    "matches_World_Cup.json": {
+      "source": 64,
+      "training": 45,
+      "test": 13,
+      "validation": 6
+    }
+  },
+  "totals": {
+    "source": 1941,
+    "training": 1359,
+    "test": 388,
+    "validation": 194
+  }
+}

@@ -1,109 +1,113 @@
-# OpenSTARLab Event Modeling package
-[![Documentation Status](https://readthedocs.org/projects/openstarlab/badge/?version=latest)](https://openstarlab.readthedocs.io/en/latest/?badge=latest)
-[![dm](https://img.shields.io/pypi/dm/openstarlab-event)](https://pypi.org/project/openstarlab-event/)
-[![ArXiv](https://img.shields.io/badge/ArXiv-2502.02785-b31b1b?logo=arxiv)](https://arxiv.org/abs/2502.02785)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Chat-5865F2?logo=discord&logoColor=white)](https://discord.gg/PnH2MDDaCf)
-[![YouTube Tutorial](https://img.shields.io/badge/Watch-Tutorial-red?logo=youtube)](https://youtu.be/R5IgtuaMEt8)
+# Beyond Possession
 
-## Introduction
-The OpenSTARLab Event package is the fundamental package for event modeling. It is designed to provide a simple and efficient way to train, inference, and simulate events. This package supports the data preprocessed by the OpenSTARLab PreProcessing package.
+DS 340W project: a soccer tactical-analysis system. It calculates tactical metrics from match data, has analyst agents turn them into observations backed by evidence, checks every number with a critic, and shows the result in a dashboard.
 
-This package is continuously evolving to support future OpenSTARLab projects. If you have any suggestions or encounter any bugs, please feel free to open an issue.
+The project is the [`beyond-possession/`](beyond-possession/) folder. The [`dev/`](dev/) folder holds early development and testing and is not needed to run anything.
 
-<details>
-<summary><strong>Soccer Event Modeling</strong></summary>
+## What you need
 
-[![Colab](https://img.shields.io/badge/Colab-Notebook-yellow?logo=google-colab)](https://colab.research.google.com/drive/1-YQoHtA-lQZtogT8JpmmxFaS-VnjopYr?usp=sharing)
+- Python 3.11 or newer. Check with `py --version`.
+- Nothing else. There is nothing to install and no data to download.
 
-### Table: Comparison of model performance on soccer event prediction
+## Run it
 
-**Note**: Arrows indicate whether a higher (↑) or lower (↓) value is better.   
-Models are ranked by publication year. Bold values indicate the best performance (unrounded).
-For more details refer to our paper [![ArXiv](https://img.shields.io/badge/ArXiv-2502.02785-b31b1b?logo=arxiv)](https://arxiv.org/abs/2502.02785)
+This takes about 5 minutes. The commands are for Windows (PowerShell or Command Prompt).
 
-#### Wyscout Dataset
+### 1. Download the code
 
-| **Model (Year)** | **Action Acc. ↑** | **Action F1 ↑** | **Time-MAE ↓** | **X-MAE ↓** | **Y-MAE ↓** | **FLOPs** | **Num Params** |
-|------------------|-------------------|------------------|----------------|-------------|-------------|-----------|----------------|
-| MAJ              | 0.57              | 0.08             | 3.60           | 18.97       | 52.55       | -         | -              |
-| Seq2Event (2022) | 0.67              | 0.16             | 3.41           | 7.11        | 15.72       | 112M      | 135K           |
-| NMSTPP (2023)    | 0.67              | 0.17             | 3.34           | **6.94**    | **15.08**   | 296M      | 121K           |
-| LEM_1 (2024)     | **0.67**          | 0.17             | 3.07           | 8.34        | 21.44       | 50M       | 98K            |
-| LEM_3 (2024)     | 0.67              | **0.20**         | **2.69**       | 7.62        | 21.83       | 20M       | 39K            |
-| FMS (2024)       | 0.67              | 0.16             | 3.27           | 11.27       | 24.19       | 930M      | 782K           |
+On GitHub, click **Code > Download ZIP** and unzip it.
 
-#### StatsBomb Dataset
+### 2. Open a terminal in the `beyond-possession` folder
 
-| **Model (Year)** | **Action Acc. ↑** | **Action F1 ↑** | **Time-MAE ↓** | **X-MAE ↓** | **Y-MAE ↓** | **FLOPs** | **Num Params** |
-|------------------|-------------------|------------------|----------------|-------------|-------------|-----------|----------------|
-| MAJ              | 0.40              | 0.06             | 2.76           | 20.72       | 33.32       | -         | -              |
-| Seq2Event (2022) | 0.65              | 0.23             | 2.43           | 7.22        | 6.86        | 4.03B     | 413K           |
-| NMSTPP (2023)    | 0.65              | 0.23             | 2.53           | 7.38        | **6.86**    | 2.02B     | 217K           |
-| LEM_1 (2024)     | 0.65              | 0.24             | 2.23           | 7.36        | 8.21        | 66M       | 128K           |
-| LEM_3 (2024)     | **0.66**          | **0.25**         | **2.07**       | **7.07**    | 8.32        | 19M       | 38K            |
-| FMS (2024)       | 0.65              | 0.24             | 2.35           | 7.77        | 8.82        | 3.66B     | 1.29M          |
+In File Explorer, open the unzipped folder, then open the `beyond-possession` folder inside it. Right-click an empty area and choose **Open in Terminal**.
 
+Run every command below from this folder. If `py` is not found, use `python` instead.
 
-</details>
+### 3. Start the dashboard
 
-## Installation
-- Install [pytorch](https://pytorch.org/get-started/locally/) (recommended version 2.4.0 linux pip python3.8 cuda12.1)
 ```
-pip install torch torchvision torchaudio
-```
-- To install this package via PyPI
-```
-pip install openstarlab-event
-```
-- To install manually
-```
-git clone git@github.com:open-starlab/Event.git
-cd ./Event
-pip install -e .
+py run.py --no-ai
 ```
 
-## Current Features
-### Sports
-- [Event Model in Football/Soccer ⚽](https://openstarlab.readthedocs.io/en/latest/Event_Modeling/Sports/Soccer/index.html)
+The dashboard opens in your browser at http://127.0.0.1:8765. Click **Analyze match** to analyze the built-in demo match.
 
-## RoadMap
-- [x] Release the package
-- [ ] Provide pre-trained models
+Press `Ctrl+C` in the terminal to stop it before the next step.
 
-## Other Information
-Development torch version
+### 4. Run the tests
+
 ```
-version 2.4.0 linux pip python3.8 cuda12.1 
+py -m unittest discover -s tests
 ```
 
-## Developer
-<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-<!-- [![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors-) -->
-<!-- ALL-CONTRIBUTORS-BADGE:END -->
+It should end like this (the time will differ):
 
-<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-<!-- prettier-ignore-start -->
-<!-- markdownlint-disable -->
-<table>
-  <tbody>
-    <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/calvinyeungck"><img src="https://github.com/calvinyeungck.png" width="100px;" alt="Calvin Yeung"/><br /><sub><b>Calvin Yeung</b></sub></a><br /><a href="#Developer-CalvinYeung" title="Lead Developer">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/keisuke198619"><img src="https://github.com/keisuke198619.png" width="100px;" alt="Keisuke Fujii"/><br /><sub><b>Keisuke Fujii</b></sub></a><br /><a href="#lead-KeisukeFujii" title="Team Leader">🧑‍💻</a></td>
-    </tr>
-  </tbody>
-</table>
+```
+Ran 62 tests in 10.310s
 
-
-## Beyond Possession tactical-analysis app
-
-The companion research dashboard is in [`beyond-possession/`](beyond-possession/). It includes evidence-based tactical analytics, a 1,941-match catalogue, optional local Ollama or Groq API analysts, CSV/JSON event uploads, and comparison experiments.
-
-Open `beyond-possession/Beyond-Possession.code-workspace` in VS Code, or run:
-
-```bash
-cd beyond-possession
-python run.py
+OK
 ```
 
-Python 3.11+ is required. Local AI setup downloads its runtime/model on the first run. To run without downloads or API calls, use `python run.py --no-ai`. For hosted AI, copy `.env.example` to `.env` and supply your own key. See the [app README](beyond-possession/README.md) for configuration and data limitations.
+### 5. Produce the analysis report
 
+```
+py -m beyond_possession analyze --output artifacts/demo
+```
+
+It prints:
+
+```
+Report saved to artifacts/demo; 156 observations.
+```
+
+Open `artifacts/demo/report.md`. It is the same on every computer and starts like this:
+
+```
+# Beyond Possession: tactical report
+
+Match: demo-001
+System: multi | Backend: offline | Model: none
+Run: 97026e106ead4559 | Data SHA-256: d61698582c674dc21398242736a2cb8ae41e2141dbabad88867bb639a6d17d28
+
+## Evidence-backed observations
+
+- **[verified]** Northbridge FC | 0-15 min: territory share = 60.32%.
+```
+
+### 6. Run the experiment
+
+```
+py -m beyond_possession evaluate --repeats 2 --output artifacts/experiment
+```
+
+This runs all six systems (baseline, single analyst, multi-agent and three ablations) twice each. It prints:
+
+```
+Experiment saved to artifacts/experiment; 0 failed runs. Human scores are intentionally blank.
+```
+
+Open `artifacts/experiment/results.json`. Every run has `numerical_faithfulness` 1.0 and `reference_coverage` 1.0, and every system has `mean_evidence_jaccard` 1.0. The multi-agent system makes 156 observations per run.
+
+To run this step again, delete the `artifacts/experiment` folder first or use a new folder name.
+
+### macOS and Linux
+
+Use `python3` instead of `py`.
+
+## The AI analyst (optional)
+
+`--no-ai` runs the built-in analysis only. Without it, `py run.py` also sets up a local AI model, which downloads several GB the first time. See the [project README](beyond-possession/README.md).
+
+## What is in this repository
+
+| Path | What it is |
+|---|---|
+| `beyond-possession/run.py` | Starts the dashboard. |
+| `beyond-possession/beyond_possession/` | The code: data, analytics, agents, critic, experiments and the dashboard server. |
+| `beyond-possession/data/` | The built-in demo match and the catalogue of 1,941 real matches. |
+| `beyond-possession/tests/` | The tests run in step 4. |
+| `beyond-possession/docs/` | Architecture, data format and research plan. |
+| `dev/` | Early development and testing. Not part of the project. |
+
+## Credits
+
+The match catalogue comes from the public Wyscout dataset: Pappalardo et al., *A public data set of spatio-temporal match events in soccer competitions*, Scientific Data, 2019 (CC BY 4.0).

@@ -1,0 +1,7 @@
+  NOTE  : positional-encoding fix ACTIVE (event/ itself is unmodified)
+  data ready in 30s: train 2,142,893 | valid 267,199 | test 267,000
+  arm frameavg | seed 2 | params 16,121 | pe-fix True
+  epoch  1   395s | train 5.0685 | valid 4.6913 * | acc 0.6635 | F1 0.1682 | F1g 0.1707 | dT 3.073 | x 7.270 | y 15.094
+  epoch  2   413s | train 4.7077 | valid 4.6380 * | acc 0.6651 | F1 0.1649 | F1g 0.1656 | dT 3.282 | x 7.097 | y 15.106
+  epoch  3   438s | train 4.6829 | valid 4.5790 * | acc 0.6651 | F1 0.1808 | F1g 0.1860 | dT 3.305 | x 6.655 | y 14.921
+  epoch  4   354s | train 4.6644 | valid 4.5895   | acc 0.6670 | F1 0.1651 | F1g 0.1657 | dT 3.101 | x 6.629 | y 14.780
