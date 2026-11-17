@@ -8,16 +8,18 @@ from . import __version__
 from .analytics import summarize
 from .agents import run_agents
 from .data import fingerprint, validate_events, validate_tracking
+from .dataset_splits import check_match_access
 
-def analyze(rows, tracking=None, *, system='multi', backend='offline', seed=42, window_minutes=15, weights=None, model_backend=None):
+def analyze(rows, tracking=None, *, system='multi', backend='offline', seed=42, window_minutes=15, weights=None, model_backend=None, final_validation=False):
     rows=validate_events(rows)
+    dataset_access=check_match_access(rows,final_validation=final_validation)
     tracking=validate_tracking(tracking or [],rows)
     summary=summarize(rows,tracking,window_minutes,weights)
     result=run_agents(summary,system,backend,seed,model_backend)
     sha=fingerprint(rows,tracking)
     config={'system':system,'backend':backend,'seed':seed,'window_minutes':window_minutes,
             'weights':summary['tci_weights'],'model':result['model'],'version':__version__,
-            'spatial_model':summary['spatial_model']}
+            'spatial_model':summary['spatial_model'],'dataset_access':dataset_access}
     return {'schema_version':'1.0','created_at':datetime.now(timezone.utc).isoformat(),
         'run_id':hashlib.sha256((sha+json.dumps(config,sort_keys=True)).encode()).hexdigest()[:16],
         'data_sha256':sha,'config':config,'summary':summary,'analysis':result,

@@ -6,7 +6,8 @@
       "type": "process",
       "command": "${command:python.interpreterPath}",
       "args": [
-        "run.py"
+        "run.py",
+        "--api"
       ],
       "options": {
         "cwd": "${workspaceFolder}"

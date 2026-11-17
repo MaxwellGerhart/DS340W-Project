@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from .agents import CONFIGS
 from .pipeline import analyze, markdown
+from .dataset_splits import check_match_access
 
 def automatic_scores(report):
     claims=report['analysis']['claims']
@@ -25,7 +26,8 @@ def automatic_scores(report):
             'output_tokens':sum(c.get('output_tokens') or 0 for c in report['analysis']['model_calls']),
             'tactical_validity':None,'contradiction_rate':None,'cost_usd':None}
 
-def run_experiment(rows,tracking,directory,backend='offline',repeats=2,seed=42,systems=None,model_backend_factory=None):
+def run_experiment(rows,tracking,directory,backend='offline',repeats=2,seed=42,systems=None,model_backend_factory=None,final_validation=False):
+    check_match_access(rows,final_validation=final_validation)
     if not 1<=repeats<=20:raise ValueError('Repeats must be between 1 and 20.')
     systems=systems or CONFIGS
     if any(s not in CONFIGS for s in systems):raise ValueError('Unknown experimental system.')
@@ -43,7 +45,7 @@ def run_experiment(rows,tracking,directory,backend='offline',repeats=2,seed=42,s
         config={'system':system,'repeat':repeat,'backend':backend,'seed':seed+repeat}
         try:
             model=model_backend_factory() if model_backend_factory and system!='baseline' else None
-            report=analyze(rows,tracking,system=system,backend=backend,seed=seed+repeat,model_backend=model)
+            report=analyze(rows,tracking,system=system,backend=backend,seed=seed+repeat,model_backend=model,final_validation=final_validation)
             (private/f'{code}.json').write_text(json.dumps(report,indent=2,allow_nan=False))
             mapping[code]={**config,'data_sha256':report['data_sha256'],'run_id':report['run_id']}
             # No system name, backend, role, hash, latency, or critic label in the reviewer packet.

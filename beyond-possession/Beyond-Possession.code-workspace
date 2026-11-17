@@ -1,9 +1,17 @@
 {
   "folders": [
     {
+      "name": "Beyond Possession dashboard",
       "path": "."
+    },
+    {
+      "name": "NMSTPP training",
+      "path": "../DS340W-Project"
     }
   ],
+  "settings": {
+    "python.useEnvironmentsExtension": false
+  },
   "extensions": {
     "recommendations": [
       "ms-python.python",

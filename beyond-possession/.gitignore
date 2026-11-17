@@ -24,3 +24,6 @@ dist/
 
 # Public catalogue is stored compressed; local expanded copy stays local.
 data/real/combined_matches.json
+
+# Allow public match split JSONs under a parent repository that ignores data/.
+!data/

@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from .local_ai import DEFAULT_MODEL
 from .tls import verified_context
 from .cloud_ai import GroqBackend, load_environment
+from .gemini_ai import GeminiBackend
 
 ROLES = {
     'spatial': ['central_control', 'spatial_control', 'territory_share'],
@@ -141,7 +142,7 @@ def offline_select(evidence, limit=None):
 
 def run_agents(summary, system='multi', backend='offline', seed=42, model_backend=None):
     if system not in CONFIGS:raise ValueError(f'Unknown system: {system}')
-    if backend not in {'offline','ollama','groq'}:raise ValueError('Backend must be offline, groq or ollama.')
+    if backend not in {'offline','ollama','groq','gemini'}:raise ValueError('Backend must be offline, gemini, groq or ollama.')
     load_environment()
     started=time.perf_counter()
     evidence=catalog(summary)
@@ -149,6 +150,7 @@ def run_agents(summary, system='multi', backend='offline', seed=42, model_backen
     if model is None and system!='baseline':
         if backend=='ollama':model=OllamaBackend()
         elif backend=='groq':model=GroqBackend()
+        elif backend=='gemini':model=GeminiBackend()
     if isinstance(model,OllamaBackend):model.check_ready()
     with_context=system!='no_game_state'
     def scope(metrics):
@@ -174,7 +176,7 @@ def run_agents(summary, system='multi', backend='offline', seed=42, model_backen
         results=[task('single_analyst' if system=='single' else 'manager_analyst',list(summary['metric_definitions']))]
     else:
         roles={k:v for k,v in ROLES.items() if with_context or k!='game_state'}
-        if isinstance(model,(OllamaBackend,GroqBackend)):
+        if isinstance(model,(OllamaBackend,GroqBackend,GeminiBackend)):
             # A rejected call stops immediately; do not execute already-queued specialists.
             results=[task(role,metrics) for role,metrics in roles.items()]
         else:
@@ -217,5 +219,5 @@ def run_agents(summary, system='multi', backend='offline', seed=42, model_backen
         'candidate_count':candidates,'trace':trace,'latency_seconds':time.perf_counter()-started,
         'model_calls':sorted(getattr(model,'calls',[]),key=lambda c:c['role']),
         'context_enabled':with_context,'critic_enabled':system!='no_critic',
-        'evidence_policy':'Groq uses a balanced subset of at most 24 metric records per call. Dashboard results may use a one-hour response cache; CLI experiments do not.' if backend=='groq' else 'All scoped metric evidence is provided.',
+        'evidence_policy':'Hosted APIs use a balanced subset of at most 24 metric records per call. Dashboard results may use a one-hour response cache; CLI experiments do not.' if backend in {'groq','gemini'} else 'All scoped metric evidence is provided.',
         'research_warning':'Offline rules are workflow scaffolding, not a test of LLM superiority. Structured numerical verification is not a semantic or causal-validity guarantee.'}

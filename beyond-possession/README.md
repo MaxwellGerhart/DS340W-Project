@@ -1,27 +1,53 @@
 # Beyond Possession
 
+The real match catalogue now has fixed **70% Training / 20% Test / 10% unseen
+Validation** datasets in `data/real/splits/`. The normal dashboard reads Training
+and Test only. See [the split policy](docs/DATA_SPLITS.md) before experimenting.
+
 **A reproducible soccer tactical-analysis research project for DS 340 W.**
 
 Specialized analysts, deterministic soccer analytics, and a numerical critic, with an interactive dashboard and an experiment runner. Built from the capstone concept *Beyond Possession: A Multi-Agent AI System for Explainable Tactical Analysis in Soccer*.
 
-**Status:** working research prototype. Synthetic data is included. Offline rules require no installation beyond Python and no API key. Optional local Ollama models turn evidence selection into LLM specialist calls. Neither synthetic results nor offline comparisons establish that multi-agent AI is superior.
+**Status:** working research prototype. Synthetic data is included. Google Gemini is the default AI provider. Built-in analysis requires only Python and no API key. Neither synthetic results nor offline comparisons establish that multi-agent AI is superior.
 
-## No API quotas: local AI is the default
+## Google Gemini AI without Ollama
 
-The project now defaults to **Ollama with qwen2.5:3b**, running on your own machine. No API key, paid plan, daily provider quota, or per-minute provider quota is needed. The first launch downloads the runtime and model; later launches use the cache and can run offline.
+The dashboard defaults to **Google Gemini**, using `gemini-3.5-flash-lite`. The AI runs through Google's API, so a new computer needs Python, internet and your own Google AI Studio API key. No Ollama installation or model download is needed. Python 3.11 or newer is required, with no pip dependencies.
 
-Local inference is not literally unlimited: RAM, processing speed, context length and available disk space still apply. This default is a lightweight starting point, not a claim that it matches the quality of larger hosted models. Keep `AI_PROVIDER=ollama` in `.env`. Groq remains optional.
+1. Create a Gemini key at https://aistudio.google.com/apikey.
+2. Open `.env` beside `run.py`, or copy `.env.example` to `.env` on a new computer.
+3. Set the following values and save:
+
+```dotenv
+AI_PROVIDER=gemini
+GEMINI_API_KEY=your_actual_key
+GEMINI_MODEL=gemini-3.5-flash-lite
+```
+
+4. In the VS Code terminal, run `py run.py --api` on Windows, or `python3 run.py --api` on macOS/Linux. F5 also offers **Run dashboard (Google Gemini)**. The `--api` flag selects Gemini even if an older environment still selects Ollama or Groq.
+5. Open http://localhost:8765 if the browser does not open automatically.
+6. Select **Google Gemini API**, click **Check AI connection**, then try **Synthetic demo match** with **Single analyst** and click **Analyze match**.
+
+The saved match catalogue supports browsing; tactical analysis needs event data or the synthetic demo. No AI requests run merely from opening the dashboard. The connection check retrieves model information without generating text; a successful check does not prove that inference quota is available.
+
+Google offers free-tier access to this model, subject to availability and quotas. It is not unlimited. The app does not enable billing, retry quota errors automatically or silently switch providers. Billing follows your Google project's settings. Use Google AI Studio to check usage. Official references: [models](https://ai.google.dev/gemini-api/docs/models), [pricing](https://ai.google.dev/gemini-api/docs/pricing), [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits).
+
+Your key is read by the Python backend, is excluded from Git, and is never returned in dashboard configuration or reports. Only a compact selection of calculated metrics, team labels, intervals and game-state context is sent to Google's fixed API endpoint. The original full event and tracking files are not sent. `GOOGLE_API_KEY` is also accepted when `GEMINI_API_KEY` is unset. Teammates should use their own keys.
+
+Repeated dashboard requests can reuse a one-hour in-memory cache. CLI research runs do not cache inference. For command-line AI analysis, use `python3 -m beyond_possession analyze --backend gemini`; check the configured provider with `python3 -m beyond_possession doctor`.
+
+**Testing:** Gemini request formatting, structured JSON parsing, numerical verification, errors and startup are tested with mocked responses. Live inference still requires a valid Google key; successful mocked tests do not establish model quality.
 
 The Python TLS certificate fix also covers the local runtime installer. Certificate and hostname verification remain enabled. It uses the public CA bundle shipped with certifi/pip when available.
 
 ## Optional hosted API: Groq
 
-If you set `AI_PROVIDER=groq`, the F5 launch uses **Groq with openai/gpt-oss-20b**. It does not install Ollama or download model files. Built-in analysis and match browsing still work without a key.
+For the existing Groq alternative, set `AI_PROVIDER=groq` and run `python run.py` without `--api`. This uses **Groq with openai/gpt-oss-20b**. The default F5 configuration and `--api` explicitly select Google Gemini. Built-in analysis and match browsing still work without a key.
 
 1. Sign in at https://console.groq.com/keys and create a key using your own free-tier account.
 2. In VS Code, open the local **.env** file next to run.py. A blank template has been created; a fresh checkout can copy **.env.example** to **.env**.
 3. Set `GROQ_API_KEY=your_actual_key`. Leave `AI_PROVIDER=groq`.
-4. Restart run.py, select **Free API (Groq)**, and click **Check AI connection**.
+4. Restart run.py, select **Groq API (optional)**, and click **Check AI connection**.
 5. Use event data or the synthetic demo for AI tactical analysis. The saved match catalogue is for browsing; it does not contain tactical events.
 
 Keep the account on its Free tier to avoid paid API usage. Groq sets request and token limits; these can change and depend on your account. The app cannot verify your account's billing tier or enforce free pricing if you choose a paid account. It does not upgrade plans, add billing details, switch providers or retry rate-limited calls automatically.
@@ -30,9 +56,9 @@ Your key stays in the backend environment, excluded from Git and exported report
 
 **Testing:** API behavior is tested with mocked responses. No live Groq inference is claimed until an actual key has been added and tested.
 
-## Local AI setup (default)
+## Optional local AI setup
 
-Press F5 normally, or run `python run.py --local-ai`. Before opening the dashboard, the launcher:
+Choose **Run with local Ollama instead of API** in VS Code, or run `python run.py --local-ai`. Before opening the dashboard, the launcher:
 
 1. Reuses an available Ollama service, or downloads the official portable runtime for your platform.
 2. Checks the runtime archive against the SHA-256 digest published on the official GitHub release.
@@ -54,10 +80,12 @@ You cannot guarantee an already-downloaded multi-GB model on a brand-new machine
 
 1. Extract this project and open **Beyond-Possession.code-workspace** with VS Code. Alternatively, use **File > Open Folder** and select this project's `beyond-possession` folder.
 2. Install the recommended **Python** and **Python Debugger** extensions from Microsoft when VS Code offers them.
-3. Choose **Python: Select Interpreter** in the Command Palette and select **Python 3.11 or newer**. Python must already be installed on your laptop. No pip dependencies are required. The default launch prepares local Ollama once, then reuses the downloaded model.
-4. Press **F5**, or open **Run and Debug**, select **Run dashboard**, and click the green play button. The dashboard opens in your browser automatically.
+3. Choose **Python: Select Interpreter** in the Command Palette and select **Python 3.11 or newer**. Python must already be installed on your laptop. No pip dependencies are required. Add your Gemini key to `.env` as described above.
+4. Press **F5**, or open **Run and Debug**, select **Run dashboard (Google Gemini)**, and click the green play button. The dashboard opens in your browser automatically.
 
 You can also open **run.py** and click **Run Python File** at the top right. Use the Python extension's Run button, rather than a separate Code Runner extension.
+
+If the Run button reports a filename containing extra literal quotes, such as `\"/Users/.../run.py\"`, reload VS Code with **Developer: Reload Window**. The project settings disable the Python Environments terminal integration to work around its path-quoting bug. This applies whether you open this folder directly or use the supplied workspace. You can also press F5, or run `python3 run.py --api` on macOS/Linux and `py run.py --api` on Windows from the folder containing `run.py`. See [Microsoft's issue](https://github.com/microsoft/vscode-python/issues/26274).
 
 Stop with **Shift+F5** when debugging, or **Control+C** in the integrated terminal when using Run Python File. The dashboard loads the saved real match catalogue when available; otherwise it starts with synthetic demo data. The selected interpreter and paths are portable across macOS, Windows and Linux.
 
@@ -72,14 +100,14 @@ If port 8765 is busy, stop the earlier server or run `python run.py --port 8766`
 Install **Python 3.11 or newer**, open a terminal inside this folder, and run:
 
 ```bash
-python3 -m beyond_possession serve
+python3 run.py --api
 ```
 
 Open **http://127.0.0.1:8765**. On Windows, use `py` instead of `python3`.
 
-The dashboard automatically analyzes a synthetic match. Choose a team and interval to explore TCI, action share, passing networks, tracking-based spatial estimates, evidence, and critic decisions. Change systems to explore the ablations. Export JSON or Markdown reports.
+Choose the synthetic demo or an event upload, then click **Analyze match**. Choose a team and interval to explore TCI, action share, passing networks, tracking-based spatial estimates, evidence, and critic decisions. Change systems to explore the ablations. Export JSON or Markdown reports.
 
-**There are no pip dependencies, paid services or cloud accounts. The optional local Ollama launch downloads the local model once; use `python run.py --no-ai` to skip AI setup.** The dashboard works offline. Files selected in the dashboard are analyzed locally; they are not uploaded to a model service in offline mode. Ollama mode sends calculated evidence to the configured Ollama endpoint.
+**There are no pip dependencies. Google AI requires a key and internet.** Use `python run.py --no-ai` for offline built-in analysis, or `python run.py --local-ai` for optional Ollama setup. Files selected in the dashboard are analyzed locally in built-in mode. API modes send calculated evidence to the selected provider.
 
 ## What works now
 
@@ -268,14 +296,14 @@ Open this project folder directly in VS Code.
 
 ## Free API quota protection
 
-Opening the dashboard never runs a model automatically. Loading match records and changing team/interval filters also do not call Groq. Click **Analyze match** explicitly to run an analysis.
+Opening the dashboard never runs a model automatically. Loading match records and changing team/interval filters also do not call Google Gemini or Groq. Click **Analyze match** explicitly to run an analysis.
 
 The dashboard defaults to **Single analyst (1 API call)**. Specialist mode remains available and can make up to four calls; it stops immediately when one fails. A bounded API prompt sends a balanced selection of at most 24 metric records per role, rather than the entire evidence catalogue. The full deterministic metrics remain in the dashboard. This changes what evidence the model can inspect, so record this prompt policy in research comparisons.
 
 Successful dashboard responses are cached in server memory for one hour (up to 64 entries), scoped by key, model, role, seed and exact prompt. Repeating an identical dashboard request can reuse a cached response. CLI/research runs do not use this cache. The UI shows actual model requests and cache hits. Errors are not cached or retried automatically.
 
-An HTTP 429 does not necessarily mean your daily free allowance is gone. It can be a per-minute token/request limit or an oversized request. The error now includes Groq's actual explanation and Retry-After value when provided. Account-specific limits apply at organization level; changing keys does not create a new allowance. Check https://console.groq.com/settings/limits for your current limits.
+An HTTP 429 can mean a rate limit or exhausted quota. The error includes the selected provider's explanation and Retry-After value when provided. For Gemini, check your project's usage in Google AI Studio. For the optional Groq provider, check https://console.groq.com/settings/limits. Changing keys within the same project or organization does not create a separate quota.
 
 ## Location in the team repository
 
-This app lives under `beyond-possession/` alongside the existing OpenSTARLab reproduction. Open `beyond-possession/Beyond-Possession.code-workspace` in VS Code, or run `cd beyond-possession` then `python run.py`. The early OpenSTARLab reproduction is in `dev/nmstpp/`. The shipped match catalogue is gzip-compressed and read automatically.
+This app lives under `beyond-possession/` alongside the existing OpenSTARLab reproduction. Open `beyond-possession/Beyond-Possession.code-workspace` in VS Code, or run `cd beyond-possession` then `python run.py`. The original reproduction remains at the repository root. The shipped match catalogue is gzip-compressed and read automatically.

@@ -7,8 +7,9 @@
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "name": "Run dashboard",
-      "program": "${workspaceFolder}/run.py"
+      "name": "Run dashboard (Google Gemini)",
+      "program": "${workspaceFolder}/run.py",
+      "args": ["--api"]
     },
     {
       "type": "debugpy",

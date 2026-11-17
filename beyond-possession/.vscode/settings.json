@@ -8,7 +8,8 @@
     "-p",
     "test_*.py"
   ],
-  "python.terminal.executeInFileDir": false,
+  "python.useEnvironmentsExtension": false,
+  "python.terminal.executeInFileDir": true,
   "files.exclude": {
     "**/__pycache__": true
   },

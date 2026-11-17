@@ -12,6 +12,7 @@ from pathlib import Path
 from .tls import verified_context
 
 DEFAULT_GROQ_MODEL='openai/gpt-oss-20b'
+DEFAULT_PROVIDER='gemini'
 API='https://api.groq.com/openai/v1'
 ALTERNATIVES=['No causal inference is supported.','Scoreline may influence tactical choices.',
               'Substitutions may coincide with changes.','Small samples can make this estimate unstable.']
@@ -42,7 +43,7 @@ class CloudAIError(RuntimeError):
 def load_environment(path=None):
     """Minimal dotenv reader: known variables only, never executes file content."""
     path=Path(path) if path else Path(__file__).resolve().parents[1]/'.env'
-    allowed={'GROQ_API_KEY','GROQ_MODEL','AI_PROVIDER','OLLAMA_MODEL','OLLAMA_BASE_URL'}
+    allowed={'GEMINI_API_KEY','GOOGLE_API_KEY','GEMINI_MODEL','GROQ_API_KEY','GROQ_MODEL','AI_PROVIDER','OLLAMA_MODEL','OLLAMA_BASE_URL'}
     if not path.is_file():return
     for line in path.read_text(encoding='utf-8-sig').splitlines():
         line=line.strip()

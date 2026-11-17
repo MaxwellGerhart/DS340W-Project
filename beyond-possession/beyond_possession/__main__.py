@@ -1,24 +1,33 @@
 import argparse
 import json
+import os
 from pathlib import Path
 from .data import parse_csv, validate_tracking, parse_json_events, demo, write_demo
 from .pipeline import analyze, save_report
 from .evaluation import run_experiment
 from .server import serve
 from .agents import OllamaBackend
-from .cloud_ai import load_environment
+from .cloud_ai import DEFAULT_PROVIDER, GroqBackend, load_environment
+from .gemini_ai import GeminiBackend
 from .matches import EXPECTED_FILES, write_catalog
+from .dataset_splits import write_match_splits
 
 def main():
     load_environment()
     parser=argparse.ArgumentParser(description='Beyond Possession: evidence-first soccer analysis')
     sub=parser.add_subparsers(dest='command',required=True)
-    sub.add_parser('doctor',help='Check the Ollama service and configured model')
+    doctor=sub.add_parser('doctor',help='Check the configured AI provider and model')
+    doctor.add_argument('--backend',choices=['gemini','groq','ollama','offline'],default=os.getenv('AI_PROVIDER',DEFAULT_PROVIDER))
     web=sub.add_parser('serve',help='Launch the local dashboard')
     web.add_argument('--host',default='127.0.0.1');web.add_argument('--port',type=int,default=8765)
     merge=sub.add_parser('combine',help='Combine the seven match JSON files into one catalog')
     merge.add_argument('--input-dir',default='data/raw',help='Folder containing the seven matches_*.json files')
     merge.add_argument('--output',default='data/real/combined_matches.json')
+    split=sub.add_parser('split',help='Freeze 70/20/10 Training/Test/Validation match datasets')
+    split.add_argument('--catalog',default='data/real/combined_matches.json.gz')
+    split.add_argument('--output',default='data/real/splits')
+    split.add_argument('--seed',type=int,default=42)
+    split.add_argument('--ratios',type=float,nargs=3,default=[.7,.2,.1],metavar=('TRAIN','TEST','VALIDATION'))
     gen=sub.add_parser('demo',help='Write reproducible synthetic events and tracking')
     gen.add_argument('--output',default='data/demo');gen.add_argument('--seed',type=int,default=42)
     for command in ['analyze','evaluate']:
@@ -26,8 +35,9 @@ def main():
         p.add_argument('--events',help='Normalized event CSV or JSON; omit for synthetic demo')
         p.add_argument('--tracking',help='Optional normalized tracking JSON')
         p.add_argument('--match-id',help='Select one match from a multi-match event CSV')
-        p.add_argument('--backend',choices=['offline','ollama','groq'],default='offline')
+        p.add_argument('--backend',choices=['offline','ollama','groq','gemini'],default='offline')
         p.add_argument('--seed',type=int,default=42)
+        p.add_argument('--final-validation',action='store_true',help='Explicitly unlock final unseen matches after development is frozen')
         p.add_argument('--output',default='artifacts/'+command)
         if command=='analyze':
             p.add_argument('--system',choices=['baseline','single','multi','no_critic','no_game_state','no_specialists'],default='multi')
@@ -38,7 +48,14 @@ def main():
     args=parser.parse_args()
     try:
         if args.command=='doctor':
-            print(json.dumps(OllamaBackend().check_ready(),indent=2))
+            providers={'gemini':GeminiBackend,'groq':GroqBackend,'ollama':OllamaBackend}
+            result=providers[args.backend]().check_ready() if args.backend!='offline' else {'available':True,'provider':'Built-in analysis','model':None}
+            print(json.dumps(result,indent=2))
+            return
+        if args.command=='split':
+            manifest=write_match_splits(args.catalog,args.output,args.seed,args.ratios)
+            print(json.dumps({name:spec['matches'] for name,spec in manifest['splits'].items()},indent=2))
+            print('Saved to '+args.output+'. Validation is excluded from development.')
             return
         if args.command=='combine':
             paths=[Path(args.input_dir)/name for name in EXPECTED_FILES]
@@ -60,11 +77,11 @@ def main():
             frames=json.loads(Path(args.tracking).read_text()) if args.tracking else []
         else:rows,frames=demo(args.seed)
         if args.command=='analyze':
-            report=analyze(rows,frames,system=args.system,backend=args.backend,seed=args.seed,window_minutes=args.window)
+            report=analyze(rows,frames,system=args.system,backend=args.backend,seed=args.seed,window_minutes=args.window,final_validation=args.final_validation)
             save_report(report,args.output,args.database)
             print(f"Report saved to {args.output}; {len(report['analysis']['claims'])} observations.")
         else:
-            result=run_experiment(rows,frames,args.output,args.backend,args.repeats,args.seed)
+            result=run_experiment(rows,frames,args.output,args.backend,args.repeats,args.seed,final_validation=args.final_validation)
             failures=sum(r['status']=='error' for r in result['records'])
             print(f'Experiment saved to {args.output}; {failures} failed runs. Human scores are intentionally blank.')
             if failures:raise SystemExit(1)

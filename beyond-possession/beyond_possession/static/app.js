@@ -49,7 +49,7 @@ function render(){
  $('raw-metrics').innerHTML='<table><thead><tr><th>Metric</th><th>Value</th><th>Definition</th></tr></thead><tbody>'+Object.entries(s.metric_definitions).map(([k,d])=>`<tr><td>${esc(nice(k))}</td><td>${metricValue(k,m[k])}</td><td>${esc(d)}</td></tr>`).join('')+'</tbody></table>';
 }
 async function run(event){
- if(event)event.preventDefault();$('run').disabled=true;$('run').textContent='Analyzing…';$('message').textContent='Calculating match statistics. Local AI can take a few minutes.';
+ if(event)event.preventDefault();$('run').disabled=true;$('run').textContent='Analyzing…';$('message').textContent='Calculating match statistics and preparing findings…';
  try{
  const source=$('source').value;let payload={source,system:$('system').value,backend:$('backend').value,window_minutes:Number($('window').value),seed:42};
  if(source==='upload'){
@@ -77,11 +77,11 @@ $('source').addEventListener('change',()=>{$('upload').hidden=$('source').value!
 $('controls').addEventListener('submit',run);$('team').addEventListener('change',render);$('interval').addEventListener('change',render);
 $('json-download').onclick=()=>current&&download('beyond-possession-report.json',JSON.stringify(current,null,2),'application/json');
 $('md-download').onclick=()=>current&&download('beyond-possession-report.md',reportMarkdown,'text/markdown');
-fetch('/api/config').then(r=>r.json()).then(c=>{sessionToken=c.token;setupMessage=c.ai_setup_error?' Local AI setup did not finish; built-in analysis is available. Check the VS Code terminal.':'';$('backend').value=c.preferred_backend||'ollama';if(c.preferred_backend==='groq'&&!c.groq_configured)setupMessage=' To use AI, add your Groq key to .env and restart. Built-in analysis works without a key.';savedMatchesAvailable=!!c.match_catalog_available;if(savedMatchesAvailable){$('source').value='matches';$('source').dispatchEvent(new Event('change'));return loadMatches();}$('message').textContent='Ready. Choose your data, then click Analyze match. Opening this page does not call the AI.'+setupMessage;return;}).catch(e=>{$('message').textContent=e.message});
+fetch('/api/config').then(r=>r.json()).then(c=>{sessionToken=c.token;setupMessage=c.ai_setup_error?' Local AI setup did not finish; built-in analysis is available. Check the VS Code terminal.':'';$('backend').value=c.preferred_backend||'gemini';if($('backend').value==='gemini'&&!c.gemini_configured)setupMessage=' To use Google Gemini, add GEMINI_API_KEY to .env and restart. Create your key at aistudio.google.com/apikey. Built-in analysis works without a key.';if(c.preferred_backend==='groq'&&!c.groq_configured)setupMessage=' To use AI, add your Groq key to .env and restart. Built-in analysis works without a key.';savedMatchesAvailable=!!c.match_catalog_available;if(savedMatchesAvailable){$('source').value='matches';$('source').dispatchEvent(new Event('change'));return loadMatches();}$('message').textContent='Ready. Choose your data, then click Analyze match. Opening this page does not call the AI.'+setupMessage;return;}).catch(e=>{$('message').textContent=e.message});
 
 $('check-ollama').onclick=async()=>{
  $('check-ollama').disabled=true;$('message').textContent='Checking the selected AI connection…';
- try{if($('backend').value==='offline'){$('message').textContent='Built-in analysis is ready. No API key or model needed.';return;}const isGroq=$('backend').value==='groq';const response=await fetch(isGroq?'/api/groq-status':'/api/ollama-status');if(!response.ok)throw Error('Connection check failed. Restart the updated dashboard.');const result=await response.json();$('message').textContent=result.available?`${result.provider||'Ollama'} is ready. Model: ${result.model}. ${result.note||''}`:result.error;}
+ try{if($('backend').value==='offline'){$('message').textContent='Built-in analysis is ready. No API key or model needed.';return;}const routes={gemini:'/api/gemini-status',groq:'/api/groq-status',ollama:'/api/ollama-status'};const response=await fetch(routes[$('backend').value]);if(!response.ok)throw Error('Connection check failed. Restart the updated dashboard.');const result=await response.json();$('message').textContent=result.available?`${result.provider||'Ollama'} is ready. Model: ${result.model}. ${result.note||''}`:result.error;}
  catch(error){$('message').textContent=error.message;}
  finally{$('check-ollama').disabled=false;}
 };
@@ -94,10 +94,11 @@ async function loadMatches(){
  const result=await response.json();if(!response.ok)throw Error(result.error||'Could not read the match files.');
  matchCatalog=result.catalog;const summary=matchCatalog.summary;$('catalog-results').hidden=false;$('results').hidden=true;$('source-note').textContent='YOUR MATCH DATA · '+summary.unique_matches+' matches · Match details, not event data';
  $('catalog-summary').textContent=`${summary.unique_matches} matches from ${summary.source_files} files. ${summary.identical_duplicates_removed} identical duplicates removed.`;
+ if(matchCatalog.split_policy)$('catalog-summary').textContent+=` Training and Test only. ${matchCatalog.split_policy.validation_excluded} Validation matches are held out.`;
  renderCatalogue();
  $('message').textContent='Match files loaded. Download the combined JSON to keep a copy. Tactical analysis needs a separate event file. The first 200 matches are shown below.'+setupMessage;
 }
-$('catalog-download').onclick=()=>matchCatalog&&download('combined_matches.json',JSON.stringify(matchCatalog,null,2),'application/json');
+$('catalog-download').onclick=()=>matchCatalog&&download(matchCatalog.split_policy?'development_matches.json':'combined_matches.json',JSON.stringify(matchCatalog,null,2),'application/json');
 const sectionLinks=[...document.querySelectorAll('nav a[href^="#"]')];
 function highlightSection(){
  let active='overview';
