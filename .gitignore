@@ -1,5 +1,9 @@
 __pycache__/
 .venv/
+.runtime/
+.env
+.env.*
+!.env.example
 
 # Rebuilt from the split files by dev/datasets/combine_matches.py
 /dev/datasets/combined/

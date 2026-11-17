@@ -1,3 +1,5 @@
-*.gz binary
-*.pth binary
-*.png binary
+# Frozen split hashes must remain identical on every operating system.
+*.json text eol=lf
+*.bat text eol=crlf
+*.command text eol=lf
+*.sh text eol=lf

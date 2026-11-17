@@ -1,0 +1,58 @@
+name: Public Windows download check
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-download:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify a fresh download in a path containing spaces
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $Archive = Join-Path $env:RUNNER_TEMP 'public-download.zip'
+          $Fresh = Join-Path $env:RUNNER_TEMP 'Beyond Possession fresh download'
+          git archive --format=zip --output $Archive HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Could not create the download fixture.' }
+          Expand-Archive -LiteralPath $Archive -DestinationPath $Fresh
+          if (Test-Path -LiteralPath (Join-Path $Fresh 'beyond-possession/.env')) {
+            throw 'A local environment file must not be included in the public download.'
+          }
+          & (Join-Path $Fresh 'START_WINDOWS.bat') --check
+          if ($LASTEXITCODE -ne 0) { throw 'The native Windows bootstrap failed.' }
+          $Manifest = Get-Content -LiteralPath (Join-Path $Fresh 'launchers/python_windows.json') -Raw | ConvertFrom-Json
+          $Architecture = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+          $Python = Join-Path $Fresh ('.runtime/python-' + $Manifest.version + '-' + $Architecture.ToUpperInvariant() + '/python.exe')
+          $Application = Join-Path $Fresh 'beyond-possession'
+          $Output = Join-Path $env:RUNNER_TEMP 'dashboard-stdout.txt'
+          $Errors = Join-Path $env:RUNNER_TEMP 'dashboard-stderr.txt'
+          $Arguments = '"' + (Join-Path $Application 'run.py') + '" --api --no-browser --port 18765'
+          $Process = Start-Process -FilePath $Python -ArgumentList $Arguments -WorkingDirectory $Application -PassThru -RedirectStandardOutput $Output -RedirectStandardError $Errors
+          try {
+            $Ready = $false
+            for ($Attempt = 0; $Attempt -lt 45; $Attempt++) {
+              if ($Process.HasExited) { throw ('Dashboard exited: ' + (Get-Content $Errors -Raw)) }
+              try {
+                $Health = Invoke-RestMethod -Uri 'http://127.0.0.1:18765/api/health' -TimeoutSec 2
+                if ($Health.status -eq 'ok') { $Ready = $true; break }
+              } catch { Start-Sleep -Seconds 1 }
+            }
+            if (-not $Ready) { throw 'Dashboard did not start.' }
+            $Config = Invoke-RestMethod -Uri 'http://127.0.0.1:18765/api/config'
+            if ($Config.preferred_backend -ne 'shared' -or $Config.gemini_configured) { throw 'Public shared AI was not selected, or a local key unexpectedly exists.' }
+            $Page = Invoke-WebRequest -Uri 'http://127.0.0.1:18765/' -UseBasicParsing
+            if ($Page.Content -notmatch 'Shared Google Gemini AI') { throw 'Dashboard content did not load.' }
+            $Catalogue = Invoke-RestMethod -Uri 'http://127.0.0.1:18765/api/matches'
+            if ($Catalogue.catalog.summary.unique_matches -le 0) { throw 'Included development datasets did not load.' }
+            $Service = Invoke-RestMethod -Uri 'http://127.0.0.1:18765/api/shared-status'
+            if (-not $Service.available) { throw 'The shared public AI service was not reachable.' }
+            Write-Host 'Native Windows fresh-download bootstrap, shared configuration, dashboard and match catalogue checks passed. No AI generation request was made.'
+          } catch {
+            if (Test-Path -LiteralPath $Errors) { Get-Content -LiteralPath $Errors }
+            throw
+          } finally {
+            if (-not $Process.HasExited) { Stop-Process -Id $Process.Id -Force }
+          }

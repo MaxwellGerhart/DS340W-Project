@@ -15,6 +15,7 @@ from .agents import OllamaBackend, ModelError
 from .local_ai import DEFAULT_MODEL
 from .cloud_ai import GroqBackend, CloudAIError, load_environment, key_present, DEFAULT_GROQ_MODEL, DEFAULT_PROVIDER
 from .gemini_ai import GeminiBackend, gemini_key_present, DEFAULT_GEMINI_MODEL
+from .shared_ai import SharedBackend
 from .matches import combine_matches
 from .dataset_splits import read_manifest, load_development_catalogue, development_view
 
@@ -51,6 +52,9 @@ def serve(host='127.0.0.1',port=8765,on_ready=None):
                 if not CATALOG.is_file():return self.send(404,{'error':'No saved match catalogue. Select your match JSON files to create one.'})
                 return self.send(200,{'catalog':read_saved_catalogue()})
             if path=='/api/health':return self.send(200,{'status':'ok'})
+            if path=='/api/shared-status':
+                try:return self.send(200,SharedBackend().check_ready())
+                except CloudAIError as exc:return self.send(200,{'available':False,'error':str(exc)})
             if path=='/api/gemini-status':
                 try:return self.send(200,GeminiBackend().check_ready())
                 except CloudAIError as exc:return self.send(200,{'available':False,'error':str(exc)})
@@ -100,7 +104,8 @@ def serve(host='127.0.0.1',port=8765,on_ready=None):
                     backend=payload.get('backend','offline')
                     model=None
                     if payload.get('system','multi')!='baseline':
-                        if backend=='gemini':model=GeminiBackend(cache=True)
+                        if backend=='shared':model=SharedBackend()
+                        elif backend=='gemini':model=GeminiBackend(cache=True)
                         elif backend=='groq':model=GroqBackend(cache=True)
                     report=analyze(rows,frames,system=payload.get('system','multi'),backend=backend,model_backend=model,
                         seed=int(payload.get('seed',42)),window_minutes=float(payload.get('window_minutes',15)))

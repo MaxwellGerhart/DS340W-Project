@@ -153,7 +153,7 @@ class GeminiTests(unittest.TestCase):
             obj.send = lambda status, body, kind='application/json': (status, body)
             return getattr(obj, 'do_'+method)()
         _, config = request('GET', '/api/config')
-        self.assertEqual(config['preferred_backend'], 'gemini')
+        self.assertEqual(config['preferred_backend'], 'shared')
         self.assertTrue(config['gemini_configured'])
         self.assertNotIn('fixture-google-secret', json.dumps(config))
         def transport(req, **kwargs):
@@ -183,7 +183,7 @@ class GeminiStartupTests(unittest.TestCase):
         for env, args in cases:
             with self.subTest(env=env), patch.dict(os.environ, env, clear=True), patch('sys.argv', ['run.py', '--no-browser']+args), patch('beyond_possession.cloud_ai.load_environment'), patch('beyond_possession.local_ai.prepare_local_ai') as install, patch('beyond_possession.local_ai.stop_local_ai') as stop, patch('beyond_possession.server.serve') as serve, patch('builtins.print'):
                 self.assertEqual(run.main(), 0)
-                self.assertEqual(os.environ['BEYOND_PREFERRED_BACKEND'], 'gemini')
+                self.assertEqual(os.environ['BEYOND_PREFERRED_BACKEND'], 'shared')
                 install.assert_not_called(); stop.assert_not_called(); serve.assert_called_once()
 
     def test_conflicting_api_and_local_flags_are_rejected(self):

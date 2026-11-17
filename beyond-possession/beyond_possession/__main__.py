@@ -9,6 +9,7 @@ from .server import serve
 from .agents import OllamaBackend
 from .cloud_ai import DEFAULT_PROVIDER, GroqBackend, load_environment
 from .gemini_ai import GeminiBackend
+from .shared_ai import SharedBackend
 from .matches import EXPECTED_FILES, write_catalog
 from .dataset_splits import write_match_splits
 
@@ -17,7 +18,7 @@ def main():
     parser=argparse.ArgumentParser(description='Beyond Possession: evidence-first soccer analysis')
     sub=parser.add_subparsers(dest='command',required=True)
     doctor=sub.add_parser('doctor',help='Check the configured AI provider and model')
-    doctor.add_argument('--backend',choices=['gemini','groq','ollama','offline'],default=os.getenv('AI_PROVIDER',DEFAULT_PROVIDER))
+    doctor.add_argument('--backend',choices=['shared','gemini','groq','ollama','offline'],default=os.getenv('AI_PROVIDER',DEFAULT_PROVIDER))
     web=sub.add_parser('serve',help='Launch the local dashboard')
     web.add_argument('--host',default='127.0.0.1');web.add_argument('--port',type=int,default=8765)
     merge=sub.add_parser('combine',help='Combine the seven match JSON files into one catalog')
@@ -35,7 +36,7 @@ def main():
         p.add_argument('--events',help='Normalized event CSV or JSON; omit for synthetic demo')
         p.add_argument('--tracking',help='Optional normalized tracking JSON')
         p.add_argument('--match-id',help='Select one match from a multi-match event CSV')
-        p.add_argument('--backend',choices=['offline','ollama','groq','gemini'],default='offline')
+        p.add_argument('--backend',choices=['offline','ollama','groq','gemini']+(['shared'] if command=='analyze' else []),default='offline')
         p.add_argument('--seed',type=int,default=42)
         p.add_argument('--final-validation',action='store_true',help='Explicitly unlock final unseen matches after development is frozen')
         p.add_argument('--output',default='artifacts/'+command)
@@ -48,7 +49,7 @@ def main():
     args=parser.parse_args()
     try:
         if args.command=='doctor':
-            providers={'gemini':GeminiBackend,'groq':GroqBackend,'ollama':OllamaBackend}
+            providers={'shared':SharedBackend,'gemini':GeminiBackend,'groq':GroqBackend,'ollama':OllamaBackend}
             result=providers[args.backend]().check_ready() if args.backend!='offline' else {'available':True,'provider':'Built-in analysis','model':None}
             print(json.dumps(result,indent=2))
             return

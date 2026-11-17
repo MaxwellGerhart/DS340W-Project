@@ -10,9 +10,19 @@ Specialized analysts, deterministic soccer analytics, and a numerical critic, wi
 
 **Status:** working research prototype. Synthetic data is included. Google Gemini is the default AI provider. Built-in analysis requires only Python and no API key. Neither synthetic results nor offline comparisons establish that multi-agent AI is superior.
 
-## Google Gemini AI without Ollama
+## Public download with shared Gemini AI
 
-The dashboard defaults to **Google Gemini**, using `gemini-3.5-flash-lite`. The AI runs through Google's API, so a new computer needs Python, internet and your own Google AI Studio API key. No Ollama installation or model download is needed. Python 3.11 or newer is required, with no pip dependencies.
+Download the ZIP from the original repository, extract it, and double-click **START_WINDOWS.bat** at the repository root. Python is prepared automatically on Windows. The Mac starter is **START_MAC.command** and needs Python 3.11 or newer already installed. No local API key or Ollama installation is required.
+
+The default **Shared Google Gemini AI** mode sends compact calculated evidence to the published shared service. Google credentials stay on that server. The service source is in **hosted_ai_service/**. The server issues short-lived anonymous demo sessions, limits request sizes and analyst roles, and can cache repeated observations for one hour. Best-effort per-instance limits and Google's quota apply; this is not unlimited hosted inference.
+
+From this application folder, run **python3 run.py --api** on macOS/Linux or **py run.py --api** on Windows. **F5** uses shared Gemini too. Select the synthetic demo or upload event records, then click **Analyze match**. Merely opening the dashboard does not generate AI output.
+
+Shared mode is for demonstrations. Use your own Gemini key and direct Gemini backend for uncached research measurements. CLI experiments do not offer the shared demo backend; a single CLI demo can use **analyze --backend shared**.
+
+## Optional Google Gemini access with your own key
+
+For direct personal-key mode, select **Google Gemini (own key)**, using `gemini-3.5-flash-lite`. The AI runs through Google's API, so a new computer needs Python, internet and your own Google AI Studio API key. No Ollama installation or model download is needed. Python 3.11 or newer is required, with no pip dependencies.
 
 1. Create a Gemini key at https://aistudio.google.com/apikey.
 2. Open `.env` beside `run.py`, or copy `.env.example` to `.env` on a new computer.
@@ -24,9 +34,9 @@ GEMINI_API_KEY=your_actual_key
 GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
-4. In the VS Code terminal, run `py run.py --api` on Windows, or `python3 run.py --api` on macOS/Linux. F5 also offers **Run dashboard (Google Gemini)**. The `--api` flag selects Gemini even if an older environment still selects Ollama or Groq.
+4. For direct personal-key mode, set `AI_PROVIDER=gemini` and run `py run.py` on Windows or `python3 run.py` on macOS/Linux without `--api`. F5 and `--api` use the shared service instead.
 5. Open http://localhost:8765 if the browser does not open automatically.
-6. Select **Google Gemini API**, click **Check AI connection**, then try **Synthetic demo match** with **Single analyst** and click **Analyze match**.
+6. Select **Google Gemini (own key)**, click **Check AI connection**, then try **Synthetic demo match** with **Single analyst** and click **Analyze match**.
 
 The saved match catalogue supports browsing; tactical analysis needs event data or the synthetic demo. No AI requests run merely from opening the dashboard. The connection check retrieves model information without generating text; a successful check does not prove that inference quota is available.
 
@@ -42,7 +52,7 @@ The Python TLS certificate fix also covers the local runtime installer. Certific
 
 ## Optional hosted API: Groq
 
-For the existing Groq alternative, set `AI_PROVIDER=groq` and run `python run.py` without `--api`. This uses **Groq with openai/gpt-oss-20b**. The default F5 configuration and `--api` explicitly select Google Gemini. Built-in analysis and match browsing still work without a key.
+For the existing Groq alternative, set `AI_PROVIDER=groq` and run `python run.py` without `--api`. This uses **Groq with openai/gpt-oss-20b**. The default F5 configuration and `--api` explicitly select shared Google Gemini. Built-in analysis and match browsing still work without a key.
 
 1. Sign in at https://console.groq.com/keys and create a key using your own free-tier account.
 2. In VS Code, open the local **.env** file next to run.py. A blank template has been created; a fresh checkout can copy **.env.example** to **.env**.
@@ -80,7 +90,7 @@ You cannot guarantee an already-downloaded multi-GB model on a brand-new machine
 
 1. Extract this project and open **Beyond-Possession.code-workspace** with VS Code. Alternatively, use **File > Open Folder** and select this project's `beyond-possession` folder.
 2. Install the recommended **Python** and **Python Debugger** extensions from Microsoft when VS Code offers them.
-3. Choose **Python: Select Interpreter** in the Command Palette and select **Python 3.11 or newer**. Python must already be installed on your laptop. No pip dependencies are required. Add your Gemini key to `.env` as described above.
+3. Choose **Python: Select Interpreter** in the Command Palette and select **Python 3.11 or newer**. Python must already be installed on your laptop. No pip dependencies are required. Shared AI needs no `.env` file or key entry.
 4. Press **F5**, or open **Run and Debug**, select **Run dashboard (Google Gemini)**, and click the green play button. The dashboard opens in your browser automatically.
 
 You can also open **run.py** and click **Run Python File** at the top right. Use the Python extension's Run button, rather than a separate Code Runner extension.
@@ -107,7 +117,7 @@ Open **http://127.0.0.1:8765**. On Windows, use `py` instead of `python3`.
 
 Choose the synthetic demo or an event upload, then click **Analyze match**. Choose a team and interval to explore TCI, action share, passing networks, tracking-based spatial estimates, evidence, and critic decisions. Change systems to explore the ablations. Export JSON or Markdown reports.
 
-**There are no pip dependencies. Google AI requires a key and internet.** Use `python run.py --no-ai` for offline built-in analysis, or `python run.py --local-ai` for optional Ollama setup. Files selected in the dashboard are analyzed locally in built-in mode. API modes send calculated evidence to the selected provider.
+**There are no pip dependencies. Shared AI requires internet; the hosted service supplies its Google key.** Use `python run.py --no-ai` for offline built-in analysis, or `python run.py --local-ai` for optional Ollama setup. Files selected in the dashboard are analyzed locally in built-in mode. API modes send calculated evidence to the selected provider.
 
 ## What works now
 

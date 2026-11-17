@@ -1,3 +1,22 @@
+# Run the Beyond Possession dashboard
+
+**Public download with shared Google Gemini AI. No API key entry or Ollama setup is needed.**
+
+1. Click **Code > Download ZIP** above.
+2. Extract the entire ZIP.
+3. On Windows, double-click **START_WINDOWS.bat** in the extracted folder.
+4. Wait for the dashboard to open at **http://localhost:8765**.
+
+The first Windows launch prepares a small, verified Python runtime automatically. On Mac, use **START_MAC.command** with Python 3.11 or newer installed. Linux users can run **sh START_LINUX.sh**. Keep internet connected for shared Gemini AI and keep the terminal open while using the app.
+
+Choose **Shared Google Gemini AI**, click **Check AI connection**, select **Synthetic demo match**, and click **Analyze match**. Your saved real match catalogue loads for browsing; tactical charts need event data or the synthetic demo. The original Training/Test/Validation policy remains in force.
+
+The Google key stays on the hosted AI service. It is not in the public download. Application, launcher and hosted service source code are all in this repository. Shared demo limits and Google availability still apply. See [the dashboard README](beyond-possession/README.md), [shared service source](beyond-possession/hosted_ai_service), and [service information](https://beyond-possession-ds340w-ai.arnavbedi123.chatgpt.site).
+
+The original OpenSTARLab reproduction is documented below.
+
+---
+
 # Beyond Possession
 
 DS 340W project: a soccer tactical-analysis system. It calculates tactical metrics from match data, has analyst agents turn them into observations backed by evidence, checks every number with a critic, and shows the result in a dashboard.

@@ -12,7 +12,7 @@ def main():
 
     parser = argparse.ArgumentParser(description='Start the Beyond Possession dashboard')
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument('--api', action='store_true', help='Use Google Gemini API without installing or starting Ollama')
+    mode.add_argument('--api', action='store_true', help='Use shared Google Gemini AI without a local API key or Ollama')
     mode.add_argument('--local-ai', action='store_true', help='Use and prepare the optional Ollama model')
     mode.add_argument('--no-ai', action='store_true', help='Run built-in analysis without calling an AI model')
     parser.add_argument('--port', type=int, default=8765)
@@ -24,9 +24,9 @@ def main():
     from beyond_possession.gemini_ai import DEFAULT_GEMINI_MODEL, gemini_key_present
     load_environment()
     process=None
-    provider='offline' if args.no_ai else ('gemini' if args.api else ('ollama' if args.local_ai else os.getenv('AI_PROVIDER',DEFAULT_PROVIDER)))
-    if provider not in {'gemini','groq','ollama','offline'}:
-        parser.error('AI_PROVIDER must be gemini, groq, ollama, or offline.')
+    provider='offline' if args.no_ai else ('shared' if args.api else ('ollama' if args.local_ai else os.getenv('AI_PROVIDER',DEFAULT_PROVIDER)))
+    if provider not in {'shared','gemini','groq','ollama','offline'}:
+        parser.error('AI_PROVIDER must be shared, gemini, groq, ollama, or offline.')
     os.environ['BEYOND_PREFERRED_BACKEND']=provider
     os.environ.pop('BEYOND_AI_SETUP_ERROR',None)
     if provider=='ollama':
@@ -36,6 +36,8 @@ def main():
             print(str(error), file=sys.stderr)
             print('Starting the dashboard with built-in analysis.', file=sys.stderr)
             os.environ['BEYOND_AI_SETUP_ERROR']=str(error)
+    elif provider=='shared':
+        print('Shared Google Gemini AI mode. Internet is required; no API key entry or Ollama installation is needed.')
     elif provider=='gemini':
         print('Google Gemini API mode. Model: '+os.getenv('GEMINI_MODEL',DEFAULT_GEMINI_MODEL))
         print('AI runs through Google. No Ollama installation or model download is needed.')
