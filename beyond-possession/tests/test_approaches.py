@@ -157,6 +157,19 @@ class NarrativeTests(unittest.TestCase):
         claim=prose(self.item);claim['numbers']*=2
         self.assertFalse(fact_check(claim,self.evidence)[0])
 
+    def test_ordinal_minutes_are_checked_and_unit_denominator_is_typed(self):
+        item={**self.item,'start':900,'end':1800}
+        claim=prose(item);claim['text']+=' Between the 15th and 30th minutes.'
+        claim['numbers'] += [{'quote':quote,'evidence_id':item['evidence_id'],'field':field} for quote,field in [('15','start_minute'),('30','end_minute')]]
+        self.assertTrue(fact_check(claim,{item['evidence_id']:item})[0])
+        claim['text']=claim['text'].replace('30th','99th')
+        self.assertFalse(fact_check(claim,{item['evidence_id']:item})[0])
+        pressure={**item,'metric':'pressure_per100','value':33.00970873786408}
+        claim=prose(pressure,text=item['team']+' recorded 33.01 pressures per 100 opponent pass attempts.',quote='33.01')
+        claim['numbers'].append({'quote':'100','evidence_id':item['evidence_id'],'field':'unit_denominator'})
+        self.assertTrue(fact_check(claim,{item['evidence_id']:pressure})[0])
+        self.assertFalse(fact_check(claim,{item['evidence_id']:item})[0])
+
     def test_cross_metric_wrong_unit_and_unknown_citation_fail(self):
         claim=prose(self.item);claim['numbers'][0]['evidence_id']='invented'
         self.assertFalse(fact_check(claim,self.evidence)[0])

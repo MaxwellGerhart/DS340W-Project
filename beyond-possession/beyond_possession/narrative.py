@@ -5,8 +5,8 @@ from collections import Counter
 
 from .cloud_ai import ALTERNATIVES
 
-FIELDS = ['value', 'start_minute', 'end_minute', 'score_for', 'score_against', 'red_cards_for', 'red_cards_against']
-NUMBER = re.compile(r'(?<![\w.])[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[eE][+-]?\d+)?\s*%?(?!\w|\.\d)', re.UNICODE)
+FIELDS = ['value', 'start_minute', 'end_minute', 'score_for', 'score_against', 'red_cards_for', 'red_cards_against', 'unit_denominator']
+NUMBER = re.compile(r'(?<![\w.])[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[eE][+-]?\d+)?(?:st|nd|rd|th)?\s*%?(?!\w|\.\d)', re.UNICODE | re.IGNORECASE)
 SMALL = dict(zip('zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen'.split(), range(20)))
 TENS = dict(zip('twenty thirty forty fifty sixty seventy eighty ninety'.split(), range(20, 100, 10)))
 WORDS = re.compile(r'\b(?:'+'|'.join(TENS)+r')(?:[ -](?:'+'|'.join(list(SMALL)[1:10])+r'))?\b|\b(?:'+'|'.join(SMALL)+r'|hundred|thousand|million)\b', re.IGNORECASE)
@@ -30,9 +30,12 @@ def task_spec(task, payload):
             'Include the primary metric value in the prose. Rates are percentages with a % sign; TCI is a plain number; distances are meters. '
             'Example: for completion_rate with source value 0.8, the JSON value stays 0.8, the sentence says 80.00%, '
             'and its numbers quote is exactly "80.00%" including the percent sign. Never put 80 in the raw value field. '
+            'Copy the entire source value without rounding in JSON, even long decimals such as 0.9081632653061225; round only the printed sentence. '
+            'Give a short, cautious interpretation grounded in that metric, rather than only listing a number. Action share is not possession time. '
             'For EVERY occurrence of a number (including number words, minute ranges and scores), supply a numbers entry: '
             'quote is its exact printed token, evidence_id is its source and field is value, start_minute, end_minute, score_for, '
-            'score_against, red_cards_for or red_cards_against. Minute fields are seconds divided by 60; percentages multiply fractional metrics by 100. '
+            'score_against, red_cards_for, red_cards_against or unit_denominator. Minute fields are seconds divided by 60; percentages multiply fractional metrics by 100. '
+            'For pressure_per100, the unit is per 100 opponent pass attempts; bind the printed 100 to unit_denominator. It is not per 100 actions. '
             'Use at most two decimal places, numeric digits rather than number words, no ratios or unstated denominators, and no derived differences. '
             'Omit minute ranges and score numbers unless they are essential to the observation. '
             'Use only the approved alternative explanations. Correction feedback, if present, identifies previous rejected drafts: fix them. '
@@ -45,6 +48,8 @@ def task_spec(task, payload):
         prompt = ('You are a separate soccer tactical critic, reviewing the WHOLE proposed report together. '
             'Return exactly one decision per claim_id, with pass or fail and a concrete short reason under 600 characters. '
             'Check numeric accuracy against cited stats, sample size, interval, score context, tactical usefulness, '
+            'Each evidence record aggregates exactly its [start,end) interval in seconds, so 0 to 900 means the opening 15 minutes. '
+            'sample_count is support in the declared sample_unit; it need not be the denominator of a derived metric. Use the metric definition. '
             'unsupported reasoning and contradictions between claims. Reject correct-but-useless or repetitive claims, '
             'causal assertions and facts not supported by the evidence. Do not invent new facts or rewrite claims. '
             'Judge the displayed text and value, not just its evidence ID. Same metric values in different intervals are not contradictions. '
@@ -57,8 +62,14 @@ def task_spec(task, payload):
     return prompt, schema, key
 
 
+def _token(token):
+    # "30th minute" and a binding quote "30" denote the same number. Percent
+    # signs remain meaningful and cannot disappear during normalization.
+    return re.sub(r'(?<=\d)(?:st|nd|rd|th)\b', '', token.strip().casefold())
+
+
 def _value(token):
-    token = token.strip().lower()
+    token = _token(token)
     if token in SMALL:
         return SMALL[token]
     words = token.replace('-', ' ').split()
@@ -77,6 +88,9 @@ def _expected(record, field, percent):
         return value
     if percent:
         raise ValueError('Only fractional metric values may use %.')
+    if field == 'unit_denominator':
+        if record['metric'] != 'pressure_per100':raise ValueError('No declared numeric unit denominator for this metric.')
+        return 100
     if field in {'start_minute', 'end_minute'}:
         return record['start' if field == 'start_minute' else 'end']/60
     context = record.get('context', {})
@@ -108,18 +122,18 @@ def fact_check(claim, evidence):
     clean = text
     for team in sorted({evidence[ref]['team'] for ref in refs}, key=len, reverse=True):
         clean = clean.replace(team, '')
-    tokens = [match.group().strip().casefold() for pattern in (NUMBER, WORDS) for match in pattern.finditer(clean)]
+    tokens = [_token(match.group()) for pattern in (NUMBER, WORDS) for match in pattern.finditer(clean)]
     quoted, primary_value = [], False
     for binding in bindings:
         if not isinstance(binding, dict) or not isinstance(binding.get('quote'), str) or binding.get('evidence_id') not in refs or binding.get('field') not in FIELDS:
             return False, 'A numeric mention has an invalid citation or field.'
         quote, field, ref = binding['quote'].strip(), binding['field'], binding['evidence_id']
-        quoted.append(quote.casefold())
+        quoted.append(_token(quote))
         try:
             actual = _value(quote)
             expected = _expected(evidence[ref], field, quote.endswith('%'))
-            numeric = quote.rstrip('%').strip().replace(',', '')
-            if 'e' in numeric.lower():
+            numeric = _token(quote).rstrip('%').strip().replace(',', '')
+            if re.search(r'\d[eE][+-]?\d',numeric):
                 # Scientific notation is needlessly ambiguous in coach prose.
                 raise ValueError('Use ordinary decimal notation.')
             decimals = len(numeric.split('.', 1)[1]) if '.' in numeric else 0

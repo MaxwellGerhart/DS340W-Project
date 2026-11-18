@@ -54,7 +54,7 @@ The writer can compose original sentences and connect up to three cited metric r
 
 Each sentence includes a primary copied value, evidence IDs and a binding for each occurrence of a printed number. The checker independently extracts digits, percentages, signed decimals, minute/score mentions and common number words. Each token must map to its declared cited metric or interval/context field. Percentages are converted from fractions, meter/TCI values retain their units, and rounding tolerance is half the final printed decimal. Unknown references, unbound numbers, wrong values, wrong units and small supporting samples are rejected. Exact digits inside cited team names are treated as identifiers.
 
-Failed drafts go back with specific reasons **once per analyst call**. A second failed draft stays rejected. This is a content repair, not a retry after a provider/quota error. Earlier failures remain in the audit. Arbitrary derived differences, ratios and unbound numbers are intentionally unsupported. Unsupported facts without numbers can still pass numeric checking, which is why tactical AI review and expert evaluation matter.
+Failed drafts go back with specific reasons **once per analyst call**. A second failed draft stays rejected. This is a content repair, separate from the bounded Gemini HTTP 503 recovery policy. Quota and authentication errors are never retried. Earlier failures remain in the audit. Arbitrary derived differences, ratios and unbound numbers are intentionally unsupported. Unsupported facts without numbers can still pass numeric checking, which is why tactical AI review and expert evaluation matter.
 
 ## Compare the approaches
 

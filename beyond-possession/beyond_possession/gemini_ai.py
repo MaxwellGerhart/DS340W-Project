@@ -5,6 +5,7 @@ import json
 import math
 import os
 import re
+import random
 import threading
 import time
 import urllib.error
@@ -13,7 +14,7 @@ from collections import OrderedDict
 from .cloud_ai import ALTERNATIVES, CloudAIError, compact_evidence, load_environment
 from .tls import verified_context
 
-DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite'
+DEFAULT_GEMINI_MODEL = 'gemini-3.1-flash-lite'
 API = 'https://generativelanguage.googleapis.com/v1beta'
 _CACHE = OrderedDict()
 _CACHE_LOCK = threading.Lock()
@@ -43,44 +44,61 @@ class GeminiBackend:
             raise CloudAIError('GEMINI_MODEL must be a Gemini model ID, such as '+DEFAULT_GEMINI_MODEL+'.')
         self.cache = cache
         self.calls = []
+        self.last_request_attempts = 0
 
     def _request(self, path, payload=None):
         body = None if payload is None else json.dumps(payload, allow_nan=False).encode()
         request = urllib.request.Request(API+path, data=body, headers={
             'x-goog-api-key': self._key, 'Content-Type': 'application/json',
             'User-Agent': 'Beyond-Possession/0.1'})
-        try:
-            with urllib.request.urlopen(request, timeout=120, context=verified_context()) as response:
-                result = json.load(response)
-            if not isinstance(result, dict):
-                raise ValueError('Expected a JSON object')
-            return result
-        except urllib.error.HTTPError as error:
-            code = error.code
-            retry = error.headers.get('Retry-After', '') if error.headers else ''
+        generation = payload is not None and path.endswith(':generateContent')
+        attempts = 3 if generation else 1
+        deadline = time.monotonic()+100
+        requested_model = path.split('/models/', 1)[1].split(':', 1)[0] if '/models/' in path else self.model
+        for attempt in range(attempts):
+            self.last_request_attempts = attempt+1
             try:
-                detail = error.read(32768).decode('utf-8', errors='replace')
+                remaining = deadline-time.monotonic()
+                if remaining <= 0:raise TimeoutError('Request deadline reached')
+                with urllib.request.urlopen(request, timeout=min(90,remaining), context=verified_context()) as response:
+                    result = json.load(response)
+                if not isinstance(result, dict):raise ValueError('Expected a JSON object')
+                return result
+            except urllib.error.HTTPError as error:
+                code = error.code
+                retry = error.headers.get('Retry-After', '') if error.headers else ''
                 try:
-                    detail = json.loads(detail)['error']['message']
-                except (ValueError, KeyError, TypeError):
-                    pass
-                detail = str(detail).replace(self._key, '[redacted]')[:1000]
-            finally:
-                error.close()
-            if code == 429:
-                wait = f' Retry after {retry[:80]} seconds.' if retry else ''
-                message = f'Google Gemini rejected this request (HTTP 429): rate limit or quota reached.{wait} Check your Google AI Studio usage. No automatic retry was made.'
-            elif code in {401, 403}:
-                message = 'Google rejected the Gemini API key or project permissions. Check GEMINI_API_KEY and API access in Google AI Studio, then restart.'
-            elif code == 404:
-                message = 'This Google project cannot access '+self.model+'. Check GEMINI_MODEL and available models in Google AI Studio.'
-            else:
-                message = f'Google Gemini returned HTTP {code}.'
-            raise CloudAIError(message+' Provider detail: '+detail) from None
-        except (urllib.error.URLError, TimeoutError, OSError):
-            raise CloudAIError('Could not reach Google Gemini. Check internet access and try again.') from None
-        except (ValueError, TypeError):
-            raise CloudAIError('Google Gemini returned an unreadable response.') from None
+                    detail = error.read(32768).decode('utf-8', errors='replace')
+                    try:detail = json.loads(detail)['error']['message']
+                    except (ValueError, KeyError, TypeError):pass
+                    detail = str(detail).replace(self._key, '[redacted]')[:1000]
+                finally:error.close()
+                # Retry only explicit capacity failures, never quota, auth,
+                # malformed outputs or arbitrary exceptions. Bound all waits.
+                if code==503 and generation and attempt<attempts-1:
+                    delay=2**attempt+random.uniform(0,.5)
+                    try:
+                        wait=float(retry)
+                        if math.isfinite(wait) and wait>=0:delay=max(delay,wait)
+                    except (ValueError,TypeError):pass
+                    if delay<=8 and time.monotonic()+delay+1<deadline:
+                        time.sleep(delay)
+                        continue
+                if code == 429:
+                    wait = f' Retry after {retry[:80]} seconds.' if retry else ''
+                    message = f'Google Gemini rejected this request (HTTP 429): rate limit or quota reached.{wait} Check your Google AI Studio usage. No automatic retry was made.'
+                elif code in {401, 403}:
+                    message = 'Google rejected the Gemini API key or project permissions. Check GEMINI_API_KEY and API access in Google AI Studio, then restart.'
+                elif code == 404:
+                    message = 'This Google project cannot access '+requested_model+'. Check GEMINI_MODEL or GEMINI_CRITIC_MODEL and available models in Google AI Studio.'
+                elif code == 503:
+                    message = f'Google Gemini is temporarily busy (HTTP 503) after {attempt+1} attempt(s). Try again shortly, or select Statistical baseline to analyze without AI.'
+                else:message = f'Google Gemini returned HTTP {code}.'
+                raise CloudAIError(message+' Provider detail: '+detail) from None
+            except (urllib.error.URLError, TimeoutError, OSError):
+                raise CloudAIError('Could not reach Google Gemini. Check internet access and try again.') from None
+            except (ValueError, TypeError):
+                raise CloudAIError('Google Gemini returned an unreadable response.') from None
 
     def check_ready(self):
         data = self._request('/models/'+self.model)
@@ -110,7 +128,7 @@ class GeminiBackend:
             with _CACHE_LOCK:
                 entry = _CACHE.get(cache_key)
                 if entry and time.monotonic()-entry[0] < _CACHE_TTL:
-                    self.calls.append({'role': role, 'seconds': 0, 'input_tokens': 0, 'output_tokens': 0, 'cached': True})
+                    self.calls.append({'role': role, 'seconds': 0, 'input_tokens': 0, 'output_tokens': 0, 'cached': True, 'http_attempts': 0})
                     return copy.deepcopy(entry[1])
         start = time.perf_counter()
         data = self._request('/models/'+self.model+':generateContent', payload)
@@ -134,6 +152,7 @@ class GeminiBackend:
             raise CloudAIError('Google Gemini did not return complete structured observations. The response may be blocked or truncated; no built-in result was substituted.') from None
         usage = data.get('usageMetadata') or {}
         self.calls.append({'role': role, 'seconds': time.perf_counter()-start,
+                           'model': self.model, 'http_attempts': self.last_request_attempts,
                            'input_tokens': usage.get('promptTokenCount'),
                            'output_tokens': usage.get('candidatesTokenCount'),
                            'thinking_tokens': usage.get('thoughtsTokenCount', 0)})

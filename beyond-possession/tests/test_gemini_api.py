@@ -92,6 +92,39 @@ class GeminiTests(unittest.TestCase):
         self.assertIn('daily quota', str(caught.exception))
         self.assertNotIn('fixture-google-secret', str(caught.exception))
 
+    def overload(self,retry=None):
+        return urllib.error.HTTPError('https://generativelanguage.googleapis.com',503,'busy',
+            {'Retry-After':retry} if retry else {},io.BytesIO(b'{"error":{"message":"fixture-google-secret high demand"}}'))
+
+    def test_503_recovers_with_bounded_backoff_and_logs_real_attempts(self):
+        with patch('urllib.request.urlopen',side_effect=[self.overload(),self.overload(),Response(completion())]) as call,patch('beyond_possession.gemini_ai.time.sleep') as wait,patch('beyond_possession.gemini_ai.random.uniform',return_value=0):
+            model=GeminiBackend();self.assertEqual(model.select('spatial',[],42),[])
+        self.assertEqual(call.call_count,3)
+        self.assertEqual([entry.args[0] for entry in wait.call_args_list],[1,2])
+        self.assertEqual(model.calls[0]['http_attempts'],3)
+        self.assertNotIn('fixture-google-secret',json.dumps(model.calls))
+
+    def test_persistent_503_stops_at_three_and_redacts(self):
+        with patch('urllib.request.urlopen',side_effect=[self.overload() for _ in range(3)]) as call,patch('beyond_possession.gemini_ai.time.sleep'):
+            with self.assertRaisesRegex(CloudAIError,'after 3 attempt') as caught:GeminiBackend().select('spatial',[],42)
+        self.assertEqual(call.call_count,3)
+        self.assertNotIn('fixture-google-secret',str(caught.exception))
+
+    def test_long_retry_after_and_non_inference_checks_do_not_loop(self):
+        with patch('urllib.request.urlopen',side_effect=self.overload('60')) as call,patch('beyond_possession.gemini_ai.time.sleep') as wait:
+            with self.assertRaises(CloudAIError):GeminiBackend().select('spatial',[],42)
+        self.assertEqual(call.call_count,1);wait.assert_not_called()
+        with patch('urllib.request.urlopen',side_effect=self.overload()) as call,patch('beyond_possession.gemini_ai.time.sleep') as wait:
+            with self.assertRaises(CloudAIError):GeminiBackend().check_ready()
+        self.assertEqual(call.call_count,1);wait.assert_not_called()
+
+    def test_retry_stops_immediately_if_google_returns_quota_or_bad_request(self):
+        for code in [400,401,403,404,429]:
+            error=urllib.error.HTTPError('https://generativelanguage.googleapis.com',code,'rejected',{},io.BytesIO(b'{"error":{"message":"fixture-google-secret"}}'))
+            with self.subTest(code=code),patch('urllib.request.urlopen',side_effect=[self.overload(),error]) as call,patch('beyond_possession.gemini_ai.time.sleep') as wait:
+                with self.assertRaises(CloudAIError):GeminiBackend().select('spatial',[],42)
+            self.assertEqual(call.call_count,2);self.assertEqual(wait.call_count,1)
+
     def test_auth_and_model_errors_include_correct_next_step(self):
         for code, hint in [(403, 'GEMINI_API_KEY'), (404, 'GEMINI_MODEL')]:
             error = urllib.error.HTTPError('https://generativelanguage.googleapis.com', code, 'rejected', {},

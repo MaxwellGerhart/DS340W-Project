@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const source = await readFile(new URL('../worker/index.js', import.meta.url),'utf8');
 const {default: worker} = await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
-const env = {GEMINI_API_KEY:'fixture-google-key',SESSION_SECRET:'fixture-session-secret-1234567890',GEMINI_MODEL:'gemini-3.5-flash-lite'};
+const env = {GEMINI_API_KEY:'fixture-google-key',SESSION_SECRET:'fixture-session-secret-1234567890',GEMINI_MODEL:'gemini-3.1-flash-lite'};
 const origin = 'https://fixture.example';
 const item = {evidence_id:'w0:tci',team:'Team A',start:0,end:900,metric:'tci',value:50};
 const claim = {evidence_id:item.evidence_id,value:item.value,alternative_explanation:'No causal inference is supported.'};
 let calls=0;
 const originalFetch=globalThis.fetch;
+const originalSetTimeout=globalThis.setTimeout;
 globalThis.fetch=async (url,init)=>{
  calls++;
  assert.equal(init.headers['x-goog-api-key'],env.GEMINI_API_KEY);
@@ -72,8 +73,21 @@ try {
  response=await worker.fetch(request('/api/write',write,session.token+'tamper'),env);assert.equal(response.status,401);
  globalThis.fetch=async()=>Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:'{"decisions":[]}'}]}}]});
  response=await worker.fetch(request('/api/review',{...review,seed:44},session.token,'research-fixture'),env);assert.equal(response.status,502);
- globalThis.fetch=async()=>Response.json({error:{message:'Busy '+env.GEMINI_API_KEY}},{status:503});
+ let retryCalls=0;
+ globalThis.setTimeout=(callback)=>originalSetTimeout(callback,0);
+ globalThis.fetch=async()=>{retryCalls++;return retryCalls<3?Response.json({error:{message:'Busy'}},{status:503}):Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({claims:[claim]})}]}}]});};
+ response=await worker.fetch(request('/api/select',{role:'single_analyst',evidence:[item],seed:45},session.token,'retry-success'),env);
+ assert.equal(response.status,200);assert.equal(retryCalls,3);assert.equal((await response.json()).http_attempts,3);
+ response=await worker.fetch(request('/api/select',{role:'single_analyst',evidence:[item],seed:45},session.token,'retry-success'),env);
+ assert.equal((await response.json()).http_attempts,0);assert.equal(retryCalls,3);
+ retryCalls=0;globalThis.fetch=async()=>{retryCalls++;return Response.json({error:{message:'Busy '+env.GEMINI_API_KEY}},{status:503});};
  response=await worker.fetch(request('/api/select',{role:'single_analyst',evidence:[item],seed:43},session.token),env);
- assert.equal(response.status,503);assert.ok(!(await response.text()).includes(env.GEMINI_API_KEY));
- console.log('Worker checks passed: scoped sessions, key isolation, bounded writing/review, missing critic verdicts, fixed prompts, optional critic model, validation, tamper rejection, cache isolation and provider errors.');
-} finally {globalThis.fetch=originalFetch;}
+ assert.equal(response.status,503);assert.equal(retryCalls,3);assert.ok(!(await response.text()).includes(env.GEMINI_API_KEY));
+ retryCalls=0;globalThis.fetch=async()=>{retryCalls++;return Response.json({error:{message:'Quota'}},{status:429});};
+ response=await worker.fetch(request('/api/select',{role:'single_analyst',evidence:[item],seed:46},session.token,'quota-once'),env);
+ assert.equal(response.status,429);assert.equal(retryCalls,1);
+ retryCalls=0;globalThis.fetch=async()=>{retryCalls++;return Response.json({error:{message:'Busy'}},{status:503,headers:{'retry-after':'60'}});};
+ response=await worker.fetch(request('/api/select',{role:'single_analyst',evidence:[item],seed:47},session.token,'retry-after'),env);
+ assert.equal(response.status,503);assert.equal(retryCalls,1);
+ console.log('Worker checks passed: scoped sessions, key isolation, writer/reviewer contracts, bounded 503 recovery, quota stop, Retry-After bounds, cache accounting and provider errors.');
+} finally {globalThis.fetch=originalFetch;globalThis.setTimeout=originalSetTimeout;}

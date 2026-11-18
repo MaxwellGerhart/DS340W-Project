@@ -74,8 +74,8 @@ async function run(event){
  $('team').innerHTML=current.summary.teams.map(t=>`<option>${esc(t)}</option>`).join('');
  $('interval').innerHTML=current.summary.windows.filter(w=>w.team===current.summary.teams[0]).map(w=>`<option value="${w.start}">${(w.start/60).toFixed(0)}–${(w.end/60).toFixed(0)} min</option>`).join('');
  $('source-note').textContent=source==='demo'?'SYNTHETIC DATA · Seed 42 · Workflow demonstration, not a research finding':'UPLOADED DATA · Validate provider mapping and licensing before research use';
- $('message').textContent=`Ready. ${current.analysis.claims.length} observations · ${current.analysis.rejected.length} rejected · ${current.analysis.latency_seconds.toFixed(2)}s · ${(current.analysis.model_calls||[]).filter(c=>!c.cached).length} AI requests · ${(current.analysis.model_calls||[]).filter(c=>c.cached).length} cached responses. ${current.analysis.backend==='offline'?'Offline rules, no LLM called.':''}`;
- $('message').textContent+=` Writing: ${current.analysis.generation_mode}. Critic: ${current.analysis.critic_mode}. ${current.analysis.correction_calls||0} correction calls. `+setupMessage;timeline();render();
+ $('message').textContent=`Ready. ${current.analysis.claims.length} observations · ${current.analysis.rejected.length} rejected · ${current.analysis.latency_seconds.toFixed(2)}s · ${(current.analysis.model_calls||[]).filter(c=>!c.cached).length} AI calls · ${(current.analysis.model_calls||[]).filter(c=>c.cached).length} cached responses. ${current.analysis.backend==='offline'?'Offline rules, no LLM called.':''}`;
+ $('message').textContent+=` ${(current.analysis.model_calls||[]).reduce((total,c)=>total+(c.cached?0:(c.http_attempts??1)),0)} HTTP generation attempts. Writing: ${current.analysis.generation_mode}. Critic: ${current.analysis.critic_mode}. ${current.analysis.correction_calls||0} correction calls. `+setupMessage;timeline();render();
  }catch(err){$('message').textContent=err.message+' Previous results, if visible, remain from the previous successful run.'}
  finally{$('run').disabled=false;$('run').textContent=$('source').value==='matches'?'Load match files':'Analyze match ↗'}
 }
@@ -126,6 +126,7 @@ $('catalog-search').addEventListener('input',renderCatalogue);
 
 function configureApproaches(){
  const original=$('backend').value==='offline'||$('system').value==='baseline';
+ $('system-note').textContent=({single:'One analyst sees all available metrics. The selected critic can add a separate review call.',multi:'Four specialist roles cover space, passing, defense and game state. More AI calls than Single analyst.',baseline:'Calculated statistics and fixed sentences. No AI calls, regardless of the selected AI backend.',no_critic:'Specialist analysts with number and AI checks deliberately disabled. Findings are unchecked.',no_game_state:'Three specialists without score/card context. Underlying charts and calculated match data remain available.',no_specialists:'One manager analyst sees all metrics. Its current reasoning scope matches Single analyst.'})[$('system').value]||'';
  $('writing').disabled=original;$('critic').disabled=original||$('system').value==='no_critic';
  if(original){$('writing').value='template';$('critic').value='numeric';}
 }

@@ -71,5 +71,6 @@ def request_task(backend, provider, task, payload, seed):
     except (ValueError, TypeError):
         raise CloudAIError('The '+task+' task returned malformed JSON. No unchecked output was substituted.') from None
     backend.calls.append({'role': payload.get('role', 'tactical_critic')+'_'+task,
-        'model': model, 'seconds': time.perf_counter()-start, 'input_tokens': tokens[0], 'output_tokens': tokens[1], 'cached': False})
+        'model': model, 'seconds': time.perf_counter()-start, 'input_tokens': tokens[0], 'output_tokens': tokens[1], 'cached': False,
+        'http_attempts': getattr(backend,'last_request_attempts',1)})
     return output

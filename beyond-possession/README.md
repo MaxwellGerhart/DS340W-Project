@@ -24,7 +24,7 @@ Shared mode is for demonstrations. Use your own Gemini key and direct Gemini bac
 
 ## Optional Google Gemini access with your own key
 
-For direct personal-key mode, select **Google Gemini (own key)**, using `gemini-3.5-flash-lite`. The AI runs through Google's API, so a new computer needs Python, internet and your own Google AI Studio API key. No Ollama installation or model download is needed. Python 3.11 or newer is required, with no pip dependencies.
+For direct personal-key mode, select **Google Gemini (own key)**, using `gemini-3.1-flash-lite`. Existing installations pinned to 3.5 should update GEMINI_MODEL in their local .env and restart run.py; the current public shared service already uses 3.1. The AI runs through Google's API, so a new computer needs Python, internet and your own Google AI Studio API key. No Ollama installation or model download is needed. Python 3.11 or newer is required, with no pip dependencies.
 
 1. Create a Gemini key at https://aistudio.google.com/apikey.
 2. Open `.env` beside `run.py`, or copy `.env.example` to `.env` on a new computer.
@@ -33,7 +33,7 @@ For direct personal-key mode, select **Google Gemini (own key)**, using `gemini-
 ```dotenv
 AI_PROVIDER=gemini
 GEMINI_API_KEY=your_actual_key
-GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_MODEL=gemini-3.1-flash-lite
 ```
 
 4. For direct personal-key mode, set `AI_PROVIDER=gemini` and run `py run.py` on Windows or `python3 run.py` on macOS/Linux without `--api`. F5 and `--api` use the shared service instead.
@@ -312,10 +312,23 @@ Opening the dashboard never runs a model automatically. Loading match records an
 
 The dashboard defaults to **Single analyst (1 API call)**. Specialist mode remains available and can make up to four calls; it stops immediately when one fails. A bounded API prompt sends a balanced selection of at most 24 metric records per role, rather than the entire evidence catalogue. The full deterministic metrics remain in the dashboard. This changes what evidence the model can inspect, so record this prompt policy in research comparisons.
 
-Successful dashboard responses are cached in server memory for one hour (up to 64 entries), scoped by key, model, role, seed and exact prompt. Repeating an identical dashboard request can reuse a cached response. CLI/research runs do not use this cache. The UI shows actual model requests and cache hits. Errors are not cached or retried automatically.
+Successful dashboard responses are cached in server memory for one hour (up to 64 entries), scoped by key, model, role, seed and exact prompt. Repeating an identical dashboard request can reuse a cached response. CLI/research runs do not use this cache. The UI shows logical AI calls, cache hits and HTTP generation attempts. Errors are not cached. Gemini capacity errors (HTTP 503) receive at most two short retries with exponential backoff and jitter, within a 100-second request deadline. Quota, authentication, schema and malformed-output errors are never retried automatically. The default model is gemini-3.1-flash-lite, verified with live structured analysis after the 3.5 model returned persistent high-demand errors.
 
 An HTTP 429 can mean a rate limit or exhausted quota. The error includes the selected provider's explanation and Retry-After value when provided. For Gemini, check your project's usage in Google AI Studio. For the optional Groq provider, check https://console.groq.com/settings/limits. Changing keys within the same project or organization does not create a separate quota.
 
 ## Location in the team repository
 
 This app lives under `beyond-possession/` alongside the existing OpenSTARLab reproduction. Open `beyond-possession/Beyond-Possession.code-workspace` in VS Code, or run `cd beyond-possession` then `python run.py`. The original reproduction remains at the repository root. The shipped match catalogue is gzip-compressed and read automatically.
+
+## What the System modes mean
+
+| Mode | Behavior |
+| --- | --- |
+| Single analyst | One analyst sees every available metric. A selected AI critic adds a separate review call. |
+| Specialist analysts | Four analysts focus on space, passing, defense and game state, then the manager combines their findings. More AI calls. |
+| Statistical baseline | Deterministic statistics and fixed sentences with numeric checks. No AI calls, even if a Google backend is selected. |
+| Ablation: no critic | Specialists with numeric and AI checks disabled, including prose content repair. Output is labeled unchecked. Basic schema/rendering checks remain. |
+| Ablation: no game state | Three specialists, without the game-state specialist or score/card context in writer/reviewer inputs. Calculated charts/context still exist in the report summary. |
+| Ablation: no specialists | One manager analyst sees all metrics. In this implementation its reasoning scope is effectively the same as Single analyst. |
+
+An ablation deliberately removes a component for a controlled comparison. Use Single analyst with free writing and hybrid review for routine AI reports; use the other modes to compare system designs. Writing, Critic and TCI controls are separate from System, with the explicit baseline/no-critic exceptions above.

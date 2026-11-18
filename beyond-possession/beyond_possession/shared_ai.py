@@ -52,7 +52,8 @@ class SharedBackend:
                 code = error.code
             finally:
                 error.close()
-            raise CloudAIError(f'Shared Gemini service returned HTTP {code}: {message[:1000]} No automatic retry was made.') from None
+            note=' No automatic retry was made.' if code==429 else ''
+            raise CloudAIError(f'Shared Gemini service returned HTTP {code}: {message[:1000]}'+note) from None
         except (urllib.error.URLError, TimeoutError, OSError):
             raise CloudAIError('Could not reach shared Gemini AI. Check internet access, retry later, or select your own Google Gemini API key.') from None
         except (ValueError, TypeError):
@@ -76,6 +77,7 @@ class SharedBackend:
         usage = result.get('usage') or {}
         self.calls.append({'role': role, 'seconds': time.monotonic()-start,
                            'input_tokens': usage.get('input_tokens'), 'output_tokens': usage.get('output_tokens'),
+                           'http_attempts': result.get('http_attempts',0 if result.get('cached') else 1),
                            'cached': result.get('cached') is True})
         return claims
 
@@ -88,8 +90,10 @@ class SharedBackend:
         if not isinstance(result.get(key), list) or len(result[key]) > 8:
             raise CloudAIError('Shared Gemini returned an invalid '+task+' response.')
         usage = result.get('usage') or {}
+        if task=='write':self.model=result.get('model') or self.model
         self.calls.append({'role': payload.get('role', 'tactical_critic')+'_'+task,
             'model': result.get('model', self.model), 'seconds': time.monotonic()-start,
             'input_tokens': usage.get('input_tokens'), 'output_tokens': usage.get('output_tokens'),
+            'http_attempts': result.get('http_attempts',0 if result.get('cached') else 1),
             'cached': result.get('cached') is True})
         return {key: result[key]}
