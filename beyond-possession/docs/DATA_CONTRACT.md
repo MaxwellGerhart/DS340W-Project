@@ -75,3 +75,7 @@ Velocities, ball location and lineup roles are not required in this version. Goa
 10. Add a small fixture test for that provider adapter and run the project tests.
 
 The included `data/demo/metadata.json` labels the demo as synthetic. Never relabel synthetic records as observations from real matches.
+
+## Optional xG labels for TCI training
+
+JSON shot/goal records may add `"xg": 0.12`; CSV may add an optional `xg` column. Every training/test shot or goal needs its provider-supplied value in [0,1]. Other events leave it blank. Boolean, nonfinite, out-of-range and nonzero non-shot values are rejected. This optional field is preserved in data fingerprints but is never a historical TCI feature. Files without it still support ordinary analysis, with the original weights. Goal/shot duplicates must be removed before labeling. See [approach changes](APPROACH_CHANGES.md) for the future-label definition, match separation and conservative coverage rules.

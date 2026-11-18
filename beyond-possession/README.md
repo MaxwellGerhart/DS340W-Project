@@ -1,5 +1,7 @@
 # Beyond Possession
 
+The three slide proposals are implemented as selectable approaches: learned TCI weights, numeric/AI/hybrid critics and free-written reports with a bounded numeric correction loop. The dashboard defaults to free writing plus hybrid review for shared Gemini. Weight training needs multi-match event data with provider xG labels; the bundled catalogue and Real Madrid vs Barcelona file cannot fit it as supplied. See [what changed and how to compare it](docs/APPROACH_CHANGES.md).
+
 The real match catalogue now has fixed **70% Training / 20% Test / 10% unseen
 Validation** datasets in `data/real/splits/`. The normal dashboard reads Training
 and Test only. See [the split policy](docs/DATA_SPLITS.md) before experimenting.

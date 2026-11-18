@@ -27,6 +27,10 @@ class ModelError(RuntimeError):
     pass
 
 class OllamaBackend:
+    def generate_task(self, task, payload, seed):
+        from .model_tasks import request_task
+        return request_task(self, 'ollama', task, payload, seed)
+
     """Local Ollama only by default. Never silently substitutes fake model outputs."""
     def __init__(self, model=None, base_url=None):
         self.model=model or os.getenv('OLLAMA_MODEL',DEFAULT_MODEL)
@@ -141,85 +145,157 @@ def offline_select(evidence, limit=None):
              'alternative_explanation':ALTERNATIVES[1] if e['context']['score_at_start'][0]!=e['context']['score_at_start'][1] else ALTERNATIVES[0]}
             for e in values]
 
-def run_agents(summary, system='multi', backend='offline', seed=42, model_backend=None):
+def run_agents(summary, system='multi', backend='offline', seed=42, model_backend=None,
+               generation_mode='template', critic_mode='numeric', critic_model_backend=None):
+    from .cloud_ai import compact_evidence
+    from .narrative import fact_check, validate_decisions
     if system not in CONFIGS:raise ValueError(f'Unknown system: {system}')
     if backend not in {'offline','ollama','groq','gemini','shared'}:raise ValueError('Backend must be offline, shared, gemini, groq or ollama.')
+    if generation_mode not in {'template','free'}:raise ValueError('Writing must be template or free.')
+    if critic_mode not in {'numeric','ai','hybrid'}:raise ValueError('Critic must be numeric, ai or hybrid.')
+    requested={'generation_mode':generation_mode,'critic_mode':critic_mode}
+    if system=='baseline':generation_mode,critic_mode='template','numeric'
+    if system=='no_critic':critic_mode='none'
+    if backend=='offline' and model_backend is None and (generation_mode=='free' or critic_mode in {'ai','hybrid'}):
+        raise ValueError('Free writing and the AI critic need an AI backend. Select Shared Google Gemini or use template writing with the numeric critic.')
     load_environment()
     started=time.perf_counter()
     evidence=catalog(summary)
+    with_context=system!='no_game_state'
+    if not with_context:
+        evidence={ref:{k:v for k,v in record.items() if k!='context'} for ref,record in evidence.items()}
     model=model_backend
     if model is None and system!='baseline':
-        if backend=='ollama':model=OllamaBackend()
-        elif backend=='groq':model=GroqBackend()
-        elif backend=='gemini':model=GeminiBackend()
-        elif backend=='shared':model=SharedBackend()
+        providers={'ollama':OllamaBackend,'groq':GroqBackend,'gemini':GeminiBackend,'shared':SharedBackend}
+        if backend in providers:model=providers[backend]()
     if isinstance(model,OllamaBackend):model.check_ready()
-    with_context=system!='no_game_state'
-    def scope(metrics):
-        selected={k:dict(v) for k,v in evidence.items() if v['metric'] in metrics}
-        if not with_context:
-            for item in selected.values(): item.pop('context',None)
-        return selected
+    if generation_mode=='free' and not hasattr(model,'generate_task'):
+        raise ValueError('This analyst backend does not support free writing.')
     trace=[{'agent':'manager','action':'Calculate fixed windows and exploratory adjacent-window shifts.'}]
+
+    def inspect(raw, scoped):
+        valid,reason=critic(raw,scoped)
+        if valid and generation_mode=='free':
+            valid,reason=fact_check(raw,scoped)
+            if valid:
+                for ref in raw['evidence_ids']:
+                    record=scoped[ref]
+                    if record['sample_count']<(3 if record['sample_unit']=='snapshots' else 10):
+                        return False,'A supporting narrative citation has an insufficient sample.'
+        return valid,reason
+
     def task(role,metrics):
-        selected=scope(metrics)
-        if model:
-            claims=model.select(role,list(selected.values()),seed)
-        else:
-            if not with_context:
-                # Context-free deterministic ablation must not inspect game-state information.
-                claims=[{'evidence_id':e['evidence_id'],'value':e['value'],'alternative_explanation':ALTERNATIVES[0]}
-                        for e in selected.values()]
-            else: claims=offline_select(selected)
-        return role,claims
+        selected={k:dict(v) for k,v in evidence.items() if v['metric'] in metrics}
+        rejected_drafts=[];repairs=0
+        if generation_mode=='free':
+            compact=compact_evidence(list(selected.values()))
+            supplied={e['evidence_id']:selected[e['evidence_id']] for e in compact}
+            if not compact:return role,[],[],0,selected
+            claims=model.generate_task('write',{'role':role,'evidence':compact,'feedback':[]},seed)['claims']
+            if critic_mode!='none':
+                good=[];feedback=[]
+                for raw in claims:
+                    valid,reason=inspect(raw,supplied)
+                    if valid:good.append(raw)
+                    else:
+                        feedback.append({'claim':raw,'reason':reason})
+                        rejected_drafts.append({'agent':role,'candidate':raw,'reason':reason,'stage':'draft_fact_check'})
+                if feedback:
+                    # One bounded content repair, never an HTTP/quota retry.
+                    repaired=model.generate_task('write',{'role':role,'evidence':compact,'feedback':feedback},seed+1)['claims']
+                    repairs=1;claims=good+repaired
+            return role,claims,rejected_drafts,repairs,supplied
+        if model:claims=model.select(role,list(selected.values()),seed)
+        elif not with_context:
+            claims=[{'evidence_id':e['evidence_id'],'value':e['value'],'alternative_explanation':ALTERNATIVES[0]} for e in selected.values()]
+        else:claims=offline_select(selected)
+        return role,claims,[],0,selected
+
     if system=='baseline':
-        results=[('statistical_baseline',offline_select({k:v for k,v in evidence.items() if v['metric'] in {'tci','action_share','completion_rate','shot_share'}}))]
+        selected={k:v for k,v in evidence.items() if v['metric'] in {'tci','action_share','completion_rate','shot_share'}}
+        results=[('statistical_baseline',offline_select(selected),[],0,selected)]
     elif system in {'single','no_specialists'}:
         results=[task('single_analyst' if system=='single' else 'manager_analyst',list(summary['metric_definitions']))]
     else:
         roles={k:v for k,v in ROLES.items() if with_context or k!='game_state'}
-        if isinstance(model,(OllamaBackend,GroqBackend,GeminiBackend,SharedBackend)):
-            # A rejected call stops immediately; do not execute already-queued specialists.
-            results=[task(role,metrics) for role,metrics in roles.items()]
+        # Sequential network calls stop immediately on quota/provider errors.
+        if model or generation_mode=='free':results=[task(role,metrics) for role,metrics in roles.items()]
         else:
             with ThreadPoolExecutor(max_workers=4) as pool:
-                futures=[pool.submit(task,role,metrics) for role,metrics in roles.items()]
-                results=[f.result() for f in futures]
-    accepted,rejected=[],[]
-    seen=set()
-    candidates=0
-    for role,claims in results:
-        trace.append({'agent':role,'action':f'Submitted {len(claims)} evidence selections.'})
+                results=list(pool.map(lambda item:task(*item),roles.items()))
+    accepted,rejected=[],[];seen=set();candidates=0;repair_calls=0
+    for role,claims,drafts,repairs,scoped in results:
+        rejected.extend(drafts);candidates+=len(drafts)+len(claims);repair_calls+=repairs
+        trace.append({'agent':role,'action':f'Submitted {len(claims)} candidates; {len(drafts)} earlier drafts failed fact checking; {repairs} correction calls.'})
         for raw in claims:
-            candidates+=1
-            valid,reason=critic(raw,evidence)
-            if not valid and system!='no_critic':
-                rejected.append({'agent':role,'candidate':raw,'reason':reason});continue
-            if not isinstance(raw,dict) or not isinstance(raw.get('evidence_id'), str) or raw.get('evidence_id') not in evidence:
-                # Unresolvable output cannot be rendered, even with the critic ablated.
-                rejected.append({'agent':role,'candidate':raw,'reason':'Unresolvable output schema.'});continue
-            ref=raw['evidence_id']
-            if ref in seen: continue
-            seen.add(ref)
-            record=dict(evidence[ref])
-            # no_game_state also removes context from exported claims, not only prompts.
-            if not with_context:record.pop('context',None)
-            displayed=dict(record)
-            display_value=raw.get('value')
+            valid,reason=inspect(raw,scoped)
+            # Free writing always receives its own numeric fact check. The
+            # ai-only ablation bypasses the template numeric gate explicitly.
+            enforce=critic_mode in {'numeric','hybrid'} or (generation_mode=='free' and critic_mode!='none')
+            if enforce and not valid:
+                rejected.append({'agent':role,'candidate':raw,'reason':reason,'stage':'numeric'});continue
+            if not isinstance(raw,dict) or not isinstance(raw.get('evidence_id'),str) or raw['evidence_id'] not in scoped:
+                rejected.append({'agent':role,'candidate':raw,'reason':'Unresolvable output schema.','stage':'schema'});continue
+            ref=raw['evidence_id'];display_value=raw.get('value')
             if isinstance(display_value,bool) or not isinstance(display_value,(float,int)) or not math.isfinite(display_value):
-                rejected.append({'agent':role,'candidate':raw,'reason':'Unrenderable numeric value.'});continue
-            displayed['value']=display_value
-            accepted.append({'id':f'claim-{len(accepted)+1:03}','agent':role,
-                'text':statement(displayed),'evidence':record,'value':display_value,
+                rejected.append({'agent':role,'candidate':raw,'reason':'Unrenderable numeric value.','stage':'schema'});continue
+            if ref in seen:continue
+            seen.add(ref);record=dict(scoped[ref]);displayed={**record,'value':display_value}
+            text=raw.get('text') if generation_mode=='free' else statement(displayed)
+            if not isinstance(text,str) or not text.strip() or len(text)>600:
+                rejected.append({'agent':role,'candidate':raw,'reason':'Unrenderable narrative text.','stage':'schema'});continue
+            refs=raw.get('evidence_ids',[ref]) if generation_mode=='free' else [ref]
+            accepted.append({'id':f'claim-{len(accepted)+1:03}','agent':role,'text':text,'evidence':record,
+                'supporting_evidence':[dict(scoped[r]) for r in refs if r in scoped], 'value':display_value,
                 'alternative_explanation':raw.get('alternative_explanation'),
-                'verification':'verified' if valid and system!='no_critic' else 'unchecked',
-                'review_note':reason if system!='no_critic' else 'Critic deliberately disabled for ablation.'})
-    if system!='no_critic':trace.append({'agent':'critic','action':f'Checked {candidates} candidates; rejected {len(rejected)}.'})
-    trace.append({'agent':'manager','action':'Deduplicated evidence references and assembled a structured report.'})
-    return {'system':system,'backend':'template' if system=='baseline' else backend,
-        'model':getattr(model,'model',None),'seed':seed,'claims':accepted,'rejected':rejected,
-        'candidate_count':candidates,'trace':trace,'latency_seconds':time.perf_counter()-started,
-        'model_calls':sorted(getattr(model,'calls',[]),key=lambda c:c['role']),
-        'context_enabled':with_context,'critic_enabled':system!='no_critic',
-        'evidence_policy':'Shared demo AI sends at most 24 records per role and can use a hosted one-hour cache. Use your own Gemini key for uncached research repetitions.' if backend=='shared' else ('Hosted APIs use a balanced subset of at most 24 metric records per call. Dashboard results may use a one-hour response cache; CLI experiments do not.' if backend in {'groq','gemini'} else 'All scoped metric evidence is provided.'),
-        'research_warning':'Offline rules are workflow scaffolding, not a test of LLM superiority. Structured numerical verification is not a semantic or causal-validity guarantee.'}
+                'verification':'verified' if enforce and valid else 'unchecked',
+                'number_check':{'passed':valid,'applied':enforce,'reason':reason},
+                'number_bindings':raw.get('numbers',[]) if generation_mode=='free' else [],
+                'review_note':reason if enforce else ('Numeric gate bypassed for AI-only critic.' if critic_mode=='ai' else 'Critic deliberately disabled for ablation.')})
+    ai_decisions=[];reviewer=critic_model_backend or model
+    reviewer_model=None;omitted=0
+    if critic_mode in {'ai','hybrid'} and accepted:
+        if not hasattr(reviewer,'generate_task'):raise ValueError('This backend does not support the AI critic.')
+        # Keep the WHOLE reviewed report inside one bounded call, with role
+        # balance rather than taking only the first specialist's sentences.
+        groups={}
+        for claim in accepted:groups.setdefault(claim['agent'],[]).append(claim)
+        chosen=[]
+        while len(chosen)<8 and any(groups.values()):
+            for group in groups.values():
+                if group and len(chosen)<8:chosen.append(group.pop(0))
+        omitted=len(accepted)-len(chosen);accepted=chosen
+        supplied={e['evidence_id']:e for c in accepted for e in c['supporting_evidence']}
+        review_evidence=[]
+        for item in supplied.values():
+            record={k:item[k] for k in ['evidence_id','team','metric','value','start','end','sample_count','sample_unit','definition']}
+            if 'context' in item:record['context']={k:item['context'][k] for k in ['score_at_start','red_cards_at_start'] if k in item['context']}
+            review_evidence.append(record)
+        draft=[{'claim_id':c['id'],'text':c['text'],'value':c['value'],'evidence_id':c['evidence']['evidence_id'],
+                'evidence_ids':[e['evidence_id'] for e in c['supporting_evidence']]} for c in accepted]
+        output=reviewer.generate_task('review',{'role':'tactical_critic','claims':draft,'evidence':review_evidence},seed)
+        decisions=validate_decisions(output,{c['id'] for c in accepted})
+        ai_decisions=list(decisions.values());passed=[]
+        for claim in accepted:
+            decision=decisions[claim['id']]
+            claim['ai_review']=decision
+            if decision['verdict']=='fail':
+                rejected.append({'agent':'ai_critic','candidate':claim,'reason':decision['reason'],'stage':'ai'});continue
+            claim['verification']='numeric_and_ai_reviewed' if claim['number_check']['applied'] else 'ai_reviewed'
+            claim['review_note']+=' AI critic: '+decision['reason'];passed.append(claim)
+        accepted=passed
+        review_calls=getattr(reviewer,'calls',[])
+        reviewer_model=next((c.get('model') for c in reversed(review_calls) if c.get('role','').endswith('_review')),getattr(reviewer,'model',None))
+        trace.append({'agent':'ai_critic','action':f'Reviewed {len(decisions)} claims together; rejected {sum(d["verdict"]=="fail" for d in ai_decisions)}. Separate inference, not a guarantee of independent model errors.'})
+    if critic_mode!='none':trace.append({'agent':'critic','action':f'Processed {candidates} candidates; {len(rejected)} drafts/candidates rejected. Numeric checks and AI verdicts are recorded separately.'})
+    trace.append({'agent':'manager','action':'Deduplicated evidence and assembled the report.'})
+    calls=list(getattr(model,'calls',[]))
+    if reviewer is not model:calls+=list(getattr(reviewer,'calls',[]))
+    return {'system':system,'backend':'template' if system=='baseline' else backend,'model':getattr(model,'model',None),
+        'seed':seed,'claims':accepted,'rejected':rejected,'candidate_count':candidates,'trace':trace,
+        'latency_seconds':time.perf_counter()-started,'model_calls':sorted(calls,key=lambda c:c['role']),
+        'context_enabled':with_context,'critic_enabled':critic_mode!='none',
+        'generation_mode':generation_mode,'critic_mode':critic_mode,'requested_approaches':requested,
+        'critic_model':reviewer_model,'ai_decisions':ai_decisions,'correction_calls':repair_calls,'review_budget_omissions':omitted,
+        'evidence_policy':'Hosted analyst requests use at most 24 records. AI critics review at most eight role-balanced findings in one call. Shared service responses can be cached; use a personal key for uncached experiments.',
+        'research_warning':'Offline rules are workflow scaffolding. Numeric checks cannot prove reasoning. AI reviewers can share analyst errors; expert assessment and disjoint-match evaluation remain necessary.'}

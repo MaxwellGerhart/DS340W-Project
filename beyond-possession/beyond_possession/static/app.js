@@ -2,6 +2,7 @@
 const $=id=>document.getElementById(id);
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let sessionToken='',current=null,reportMarkdown='',matchCatalog=null,savedMatchesAvailable=false,setupMessage='';
+let learnedModel=null;
 const nice=k=>k.replaceAll('_',' ');
 const metricValue=(k,v)=>v==null?'Unavailable':k==='tci'?v.toFixed(2):k.endsWith('_m')?v.toFixed(2)+' m':k==='pressure_per100'?v.toFixed(2):(v*100).toFixed(1)+'%';
 const svg=(content,w=640,h=300)=>`<svg viewBox="0 0 ${w} ${h}" role="img">${content}</svg>`;
@@ -29,6 +30,7 @@ function render(){
  if(!current)return;let s=current.summary,a=current.analysis,team=$('team').value,start=Number($('interval').value);
  const w=s.windows.find(w=>w.team===team&&w.start===start);if(!w)return;
  const m=w.metrics;
+ $('tci-note').textContent=s.tci_model?.kind==='learned'?`Learned weights · Model ${s.tci_model.model_id.slice(0,12)} · Target: next 15-minute xG share. This does not establish tactical validity.`:'Original fixed weights: territory 30%, progression 25%, completion 20%, shots 25%.';
  $('metrics').innerHTML=[['tci','Tactical control index','Experimental score out of 100'],['action_share','Action share','Recorded actions, not possession time'],['progressive_pass_rate','Progressive passing','Completed progressive / attempted'],['central_control','Central spatial control',w.n_frames+' full snapshots in interval']].map(([key,title,note])=>`<div class="metric"><div class="label">${title}</div><div class="value">${metricValue(key,m[key])}</div><small>${note}</small></div>`).join('');
  $('score-context').textContent=`Score at interval start: ${w.contexts.score_at_start.join(' : ')} · ${w.n_events} team events`;
  $('components').innerHTML=Object.entries(s.tci_weights).map(([k,v])=>`<div class="component"><div class="component-title">${nice(k)} <span>${metricValue(k,m[k])}</span></div><div class="bar"><i style="width:${Math.max(0,Math.min(100,(m[k]||0)*100))}%"></i></div><small>${Math.round(v*100)}% of index</small></div>`).join('');
@@ -51,7 +53,12 @@ function render(){
 async function run(event){
  if(event)event.preventDefault();$('run').disabled=true;$('run').textContent='Analyzing…';$('message').textContent='Calculating match statistics and preparing findings…';
  try{
- const source=$('source').value;let payload={source,system:$('system').value,backend:$('backend').value,window_minutes:Number($('window').value),seed:42};
+ const source=$('source').value;let payload={source,system:$('system').value,backend:$('backend').value,window_minutes:Number($('window').value),seed:42,generation_mode:$('writing').value,critic_mode:$('critic').value};
+ if($('tci-mode').value==='learned'){
+  const file=$('tci-model-file').files[0];if(file){if(file.size>1024*1024)throw Error('Learned model JSON must be below 1 MiB.');learnedModel=JSON.parse(await file.text());}
+  if(!learnedModel)throw Error('Train TCI weights below or choose a learned model JSON file.');
+  payload.tci_model=learnedModel;
+ }
  if(source==='upload'){
  const events=$('events-file').files[0];if(!events)throw Error('Choose an event CSV or JSON file.');
  if(events.size>20*1024*1024)throw Error('Event file must be below 20 MiB.');
@@ -68,7 +75,7 @@ async function run(event){
  $('interval').innerHTML=current.summary.windows.filter(w=>w.team===current.summary.teams[0]).map(w=>`<option value="${w.start}">${(w.start/60).toFixed(0)}–${(w.end/60).toFixed(0)} min</option>`).join('');
  $('source-note').textContent=source==='demo'?'SYNTHETIC DATA · Seed 42 · Workflow demonstration, not a research finding':'UPLOADED DATA · Validate provider mapping and licensing before research use';
  $('message').textContent=`Ready. ${current.analysis.claims.length} observations · ${current.analysis.rejected.length} rejected · ${current.analysis.latency_seconds.toFixed(2)}s · ${(current.analysis.model_calls||[]).filter(c=>!c.cached).length} AI requests · ${(current.analysis.model_calls||[]).filter(c=>c.cached).length} cached responses. ${current.analysis.backend==='offline'?'Offline rules, no LLM called.':''}`;
- $('message').textContent+=setupMessage;timeline();render();
+ $('message').textContent+=` Writing: ${current.analysis.generation_mode}. Critic: ${current.analysis.critic_mode}. ${current.analysis.correction_calls||0} correction calls. `+setupMessage;timeline();render();
  }catch(err){$('message').textContent=err.message+' Previous results, if visible, remain from the previous successful run.'}
  finally{$('run').disabled=false;$('run').textContent=$('source').value==='matches'?'Load match files':'Analyze match ↗'}
 }
@@ -77,7 +84,7 @@ $('source').addEventListener('change',()=>{$('upload').hidden=$('source').value!
 $('controls').addEventListener('submit',run);$('team').addEventListener('change',render);$('interval').addEventListener('change',render);
 $('json-download').onclick=()=>current&&download('beyond-possession-report.json',JSON.stringify(current,null,2),'application/json');
 $('md-download').onclick=()=>current&&download('beyond-possession-report.md',reportMarkdown,'text/markdown');
-fetch('/api/config').then(r=>r.json()).then(c=>{sessionToken=c.token;setupMessage=c.ai_setup_error?' Local AI setup did not finish; built-in analysis is available. Check the VS Code terminal.':'';$('backend').value=c.preferred_backend||'shared';if($('backend').value==='gemini'&&!c.gemini_configured)setupMessage=' To use Google Gemini, add GEMINI_API_KEY to .env and restart. Create your key at aistudio.google.com/apikey. Built-in analysis works without a key.';if(c.preferred_backend==='groq'&&!c.groq_configured)setupMessage=' To use AI, add your Groq key to .env and restart. Built-in analysis works without a key.';savedMatchesAvailable=!!c.match_catalog_available;if(savedMatchesAvailable){$('source').value='matches';$('source').dispatchEvent(new Event('change'));return loadMatches();}$('message').textContent='Ready. Choose your data, then click Analyze match. Opening this page does not call the AI.'+setupMessage;return;}).catch(e=>{$('message').textContent=e.message});
+fetch('/api/config').then(r=>r.json()).then(c=>{sessionToken=c.token;setupMessage=c.ai_setup_error?' Local AI setup did not finish; built-in analysis is available. Check the VS Code terminal.':'';$('backend').value=c.preferred_backend||'shared';if($('backend').value==='gemini'&&!c.gemini_configured)setupMessage=' To use Google Gemini, add GEMINI_API_KEY to .env and restart. Create your key at aistudio.google.com/apikey. Built-in analysis works without a key.';if(c.preferred_backend==='groq'&&!c.groq_configured)setupMessage=' To use AI, add your Groq key to .env and restart. Built-in analysis works without a key.';configureApproaches();savedMatchesAvailable=!!c.match_catalog_available;if(savedMatchesAvailable){$('source').value='matches';$('source').dispatchEvent(new Event('change'));return loadMatches();}$('message').textContent='Ready. Choose your data, then click Analyze match. Opening this page does not call the AI.'+setupMessage;return;}).catch(e=>{$('message').textContent=e.message});
 
 $('check-ollama').onclick=async()=>{
  $('check-ollama').disabled=true;$('message').textContent='Checking the selected AI connection…';
@@ -116,3 +123,35 @@ function renderCatalogue(){
  $('catalog-table').innerHTML='<p class="chart-note">'+records.length+' matching records. Showing up to 200.</p><table><thead><tr><th>Match ID</th><th>Match</th><th>Date</th></tr></thead><tbody>'+records.slice(0,200).map(m=>`<tr><td>${esc(m.wyId??m.match_id??m.id)}</td><td>${esc(m.label??m.name??'No match label')}</td><td>${esc(m.dateutc??m.date??'')}</td></tr>`).join('')+'</tbody></table>';
 }
 $('catalog-search').addEventListener('input',renderCatalogue);
+
+function configureApproaches(){
+ const original=$('backend').value==='offline'||$('system').value==='baseline';
+ $('writing').disabled=original;$('critic').disabled=original||$('system').value==='no_critic';
+ if(original){$('writing').value='template';$('critic').value='numeric';}
+}
+$('backend').addEventListener('change',configureApproaches);
+$('system').addEventListener('change',configureApproaches);
+$('tci-mode').addEventListener('change',()=>{$('learned-upload').hidden=$('tci-mode').value!=='learned';});
+$('model-download').onclick=()=>learnedModel&&download('learned-tci-model.json',JSON.stringify(learnedModel,null,2),'application/json');
+$('train-tci').onclick=async()=>{
+ $('train-tci').disabled=true;$('training-status').textContent='Checking Training data and fitting TCI weights…';
+ try{
+  if(!sessionToken)throw Error('Wait for the dashboard to connect, then try again.');
+  const payload={window_minutes:Number($('window').value)};
+  const train=$('training-events').files[0],test=$('test-events').files[0];
+  if(!train)throw Error('Choose a Training event dataset with xg labels on every shot/goal.');
+  if(train.size+(test?.size||0)>20*1024*1024)throw Error('Keep Training and Test files below 20 MiB in total.');
+  payload[train.name.toLowerCase().endsWith('.json')?'training_json':'training_csv']=await train.text();
+  if(test)payload[test.name.toLowerCase().endsWith('.json')?'test_json':'test_csv']=await test.text();
+  const response=await fetch('/api/train-tci',{method:'POST',headers:{'Content-Type':'application/json','X-Session-Token':sessionToken},body:JSON.stringify(payload)});
+  const data=await response.json();if(!response.ok)throw Error(data.error||'Training failed.');
+  learnedModel=data.model;$('model-download').disabled=false;$('tci-mode').value='learned';$('tci-mode').dispatchEvent(new Event('change'));
+  // A newly fitted model takes precedence over an older file selection.
+  $('tci-model-file').value='';
+  $('training-status').textContent=`Fitted on ${data.model.training_scores.learned.matches} Training matches. ${data.test?'Disjoint Test comparison is below.':'No Test comparison was requested.'} Validation was not opened. Download the model to keep it.`;
+  let html='<table><thead><tr><th>Component</th><th>Learned weight</th></tr></thead><tbody>'+Object.entries(data.model.weights).map(([k,v])=>`<tr><td>${esc(nice(k))}</td><td>${(v*100).toFixed(2)}%</td></tr>`).join('')+'</tbody></table>';
+  if(data.test)html+=`<p>Test mean squared error of future xG share: original ${data.test.fixed.mse.toFixed(4)}; learned ${data.test.learned.mse.toFixed(4)}. ${data.test.learned.matches} independent matches. Lower is better; improvement is not guaranteed.</p>`;
+  $('training-results').innerHTML=html;
+ }catch(error){$('training-status').textContent=error.message+' Any previous model/results remain from the previous successful run.';}
+ finally{$('train-tci').disabled=false;}
+};

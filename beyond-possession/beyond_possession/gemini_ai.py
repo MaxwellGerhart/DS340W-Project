@@ -29,6 +29,10 @@ def gemini_key_present():
 
 
 class GeminiBackend:
+    def generate_task(self, task, payload, seed):
+        from .model_tasks import request_task
+        return request_task(self, 'gemini', task, payload, seed)
+
     def __init__(self, cache=False):
         load_environment()
         if not gemini_key_present():

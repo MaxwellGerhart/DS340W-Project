@@ -11,9 +11,9 @@
 7. The manager deduplicates references and assembles the final structured report.
 8. Save data fingerprints, configuration, model/seed, evidence, decisions, tokens, and latency.
 
-Local Ollama specialist calls run sequentially to reduce memory pressure and queue timeouts on laptops. Offline tasks and injected test backends can run concurrently; final assembly follows a stable role order. The deterministic critic does not ask a second model to judge facts. This controls one hallucination surface but does not establish tactical validity.
+AI specialist calls run sequentially and stop on the first provider error. Offline tasks may run concurrently. The original numeric critic remains available, and optional AI-only/hybrid modes use a separate model inference to judge usefulness, reasoning and contradictions. See [the three approach changes](APPROACH_CHANGES.md) for the current controls, schemas and validation limits.
 
-The current model has a constrained task: select evidence IDs and copy numbers. No unrestricted narrative, arbitrary code execution, autonomous tool loop, or recursive agent debate is implemented. `tools.MatchTools` supplies the public interfaces for a later tool-using version. All metrics are precomputed for this first working baseline. The manager records exploratory changes but does not adaptively repartition the timeline yet.
+Template mode selects evidence IDs and copies numbers. Free-writing mode allows original sentences with up to three citations and explicit numeric bindings, checked independently before rendering. One bounded content correction is supported. No arbitrary code execution, autonomous tool loop or recursive debate is implemented. Metrics remain precomputed and intervals are fixed.
 
 ## Systems
 
@@ -28,7 +28,7 @@ The current model has a constrained task: select evidence IDs and copy numbers. 
 
 In this initial constrained architecture, `single` and `no_specialists` have effectively equivalent reasoning scope. They are retained as named configurations to support future manager-routing work, not treated as independent experimental contributions. The `summary` still contains calculated score context in no_game_state runs, but analyst prompts and exported claims do not. That ablation tests context access by the analyst, not removal of underlying raw data from the full run archive.
 
-All systems share deterministic metric computation, templates and schema parsing. The single system has the same numerical guard for fairness; it does not call an LLM critic. Offline variants exercise routing and verification but do not simulate empirical LLM quality differences.
+All systems share deterministic metrics and schema parsing. Writing/critic controls are independent treatments, except the statistical baseline always uses templates and numeric checks and no_critic deliberately disables checks. Offline variants exercise routing and verification but do not simulate AI writing or judgment. Approach-comparison packets hold the analyst system constant.
 
 ## Tactical Control Index
 
@@ -36,7 +36,7 @@ All systems share deterministic metric computation, templates and schema parsing
 
 All components are fractions. Missing any component yields null; no silent imputation or reweighting occurs. A team may have a low TCI despite high action volume, which demonstrates the proposed distinction between possession-like volume and progressive control. The two teams' TCIs need not sum to 100 because completion and progressive pass rates are team-specific.
 
-Weights are a research hypothesis. They are accepted by the Python API through `analyze(..., weights={...})`; they must include all four keys, be finite and nonnegative, and sum to one. They are recorded in each report. The interface uses the documented default weights.
+Weights remain a research hypothesis. Explicit `weights={...}` and validated learned TCI artifacts are supported, with finite nonnegative weights summing to one. The interface uses fixed weights until a learned model is trained or uploaded. Training fits future xG share on Training matches; separate Test scoring compares learned and original weights. Known Validation IDs stay locked. Bundled event files lack xG labels, so no learned model is bundled.
 
 ## Spatial methods
 
@@ -50,7 +50,7 @@ A claim's evidence record contains team, [start,end), metric, definition, full-p
 
 Default minimum checks are 10 team events for event observations and 3 snapshots for spatial observations. These are software guardrails, not validated statistical confidence thresholds. In particular, a rare-event metric can have a small effective denominator despite many team events. Provider-specific denominator and missing-capability checks are required before formal data collection.
 
-The model cannot provide arbitrary free prose in this version; final sentences use a fixed metric template. A malicious wrong value is rejected by the critic; a deliberately unchecked report can retain it, enabling meaningful adversarial software tests. No numeric confidence is invented. Tactical importance, representativeness, causality, and semantic contradictions require expert review.
+Free-written prose is checked using extracted numeric tokens and declared field bindings, with displayed-precision rounding. Numeric checks do not prove the nonnumeric reasoning. AI review is a separate, fallible inference and defaults to the same base model; optional GEMINI_CRITIC_MODEL allows another Gemini model. Verdicts and model identity are logged. AI-only template and no_critic ablations can retain numeric errors and label them accordingly. Human tactical validity scores remain unset.
 
 ## Operations
 

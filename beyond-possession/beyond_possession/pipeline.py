@@ -10,16 +10,27 @@ from .agents import run_agents
 from .data import fingerprint, validate_events, validate_tracking
 from .dataset_splits import check_match_access
 
-def analyze(rows, tracking=None, *, system='multi', backend='offline', seed=42, window_minutes=15, weights=None, model_backend=None, final_validation=False):
+def analyze(rows, tracking=None, *, system='multi', backend='offline', seed=42, window_minutes=15, weights=None, model_backend=None, final_validation=False,
+            tci_model=None, generation_mode='template', critic_mode='numeric', critic_model_backend=None):
     rows=validate_events(rows)
     dataset_access=check_match_access(rows,final_validation=final_validation)
     tracking=validate_tracking(tracking or [],rows)
+    if tci_model is not None:
+        from .tci_learning import validate_model
+        validate_model(tci_model)
+        if weights is not None:raise ValueError('Choose a learned TCI model or explicit fixed weights, not both.')
+        if window_minutes!=tci_model['window_minutes']:raise ValueError('Use the same analysis window as the learned TCI model.')
+        weights=tci_model['weights']
     summary=summarize(rows,tracking,window_minutes,weights)
-    result=run_agents(summary,system,backend,seed,model_backend)
+    summary['tci_model']={'kind':'learned','model_id':tci_model['model_id'],'target':tci_model['target'],
+        'training_match_ids':tci_model['training_match_ids']} if tci_model else {'kind':'fixed','model_id':None}
+    result=run_agents(summary,system,backend,seed,model_backend,generation_mode,critic_mode,critic_model_backend)
     sha=fingerprint(rows,tracking)
     config={'system':system,'backend':backend,'seed':seed,'window_minutes':window_minutes,
             'weights':summary['tci_weights'],'model':result['model'],'version':__version__,
-            'spatial_model':summary['spatial_model'],'dataset_access':dataset_access}
+            'spatial_model':summary['spatial_model'],'dataset_access':dataset_access,
+            'tci_model':summary['tci_model'],'generation_mode':result['generation_mode'],
+            'critic_mode':result['critic_mode'],'critic_model':result['critic_model']}
     return {'schema_version':'1.0','created_at':datetime.now(timezone.utc).isoformat(),
         'run_id':hashlib.sha256((sha+json.dumps(config,sort_keys=True)).encode()).hexdigest()[:16],
         'data_sha256':sha,'config':config,'summary':summary,'analysis':result,
@@ -36,6 +47,7 @@ def markdown(report):
         f"System: {analysis['system']} | Backend: {analysis['backend']} | Model: {analysis['model'] or 'none'}",
         f"Run: {report['run_id']} | Data SHA-256: {report['data_sha256']}",'',
         '## Evidence-backed observations','']
+    lines.insert(6,f"Writing: {analysis.get('generation_mode','template')} | Critic: {analysis.get('critic_mode','numeric')} | TCI: {summary.get('tci_model',{}).get('kind','fixed')}")
     for claim in analysis['claims']:
         e=claim['evidence']
         lines.extend([f"- **[{claim['verification']}]** {claim['text']}",
@@ -43,6 +55,10 @@ def markdown(report):
             f"  Alternative: {claim['alternative_explanation']}"])
         if 'context' in e:
             lines.append(f"  Score at interval start (team-opponent): {e['context']['score_at_start']}; changes: {json.dumps(e['context']['changes'])}.")
+        if claim.get('ai_review'):
+            lines.append('  AI review: '+claim['ai_review']['verdict']+'. '+claim['ai_review']['reason'])
+        if len(claim.get('supporting_evidence',[]))>1:
+            lines.append('  Additional citations: '+', '.join(item['evidence_id'] for item in claim['supporting_evidence'][1:]))
     if summary.get('patterns'):
         lines.extend(['','## Descriptive interval comparisons',''])
         for pattern in summary['patterns']:

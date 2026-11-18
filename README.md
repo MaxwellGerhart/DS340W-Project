@@ -15,6 +15,8 @@ The Google key stays on the hosted AI service. It is not in the public download.
 
 The original OpenSTARLab reproduction is documented below.
 
+The dashboard also includes the three alternative approaches: learned TCI weights, an AI tactical critic, and free-written findings with number checks. See [implementation and comparison instructions](beyond-possession/docs/APPROACH_CHANGES.md). Weight training needs separate event datasets with provider xG labels; no trained weights are invented from the included catalogue.
+
 ---
 
 # Beyond Possession

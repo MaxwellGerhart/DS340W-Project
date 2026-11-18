@@ -18,6 +18,7 @@ from .gemini_ai import GeminiBackend, gemini_key_present, DEFAULT_GEMINI_MODEL
 from .shared_ai import SharedBackend
 from .matches import combine_matches
 from .dataset_splits import read_manifest, load_development_catalogue, development_view
+from .tci_learning import fit_tci, evaluate_tci
 
 STATIC=Path(__file__).parent/'static'
 MAX_BYTES=24*1024*1024
@@ -77,6 +78,17 @@ def serve(host='127.0.0.1',port=8765,on_ready=None):
                 if length<=0 or length>MAX_BYTES:return self.send(413,{'error':'Upload must be between 1 byte and 24 MiB.'})
                 payload=json.loads(self.rfile.read(length))
                 if not isinstance(payload,dict):raise DataError('Expected a JSON object.')
+                if urlparse(self.path).path=='/api/train-tci':
+                    if not lock.acquire(blocking=False):return self.send(409,{'error':'An analysis or training run is already active.'})
+                    try:
+                        training=parse_json_events(payload['training_json']) if 'training_json' in payload else parse_csv(payload.get('training_csv',''))
+                        model=fit_tci(training,float(payload.get('window_minutes',15)))
+                        testing=None
+                        if 'test_json' in payload or 'test_csv' in payload:
+                            test=parse_json_events(payload['test_json']) if 'test_json' in payload else parse_csv(payload['test_csv'])
+                            testing=evaluate_tci(model,test)
+                        return self.send(200,{'model':model,'test':testing})
+                    finally:lock.release()
                 if urlparse(self.path).path=='/api/combine-matches':
                     files=payload.get('files',[])
                     if not isinstance(files,list) or not 1<=len(files)<=20:
@@ -108,7 +120,9 @@ def serve(host='127.0.0.1',port=8765,on_ready=None):
                         elif backend=='gemini':model=GeminiBackend(cache=True)
                         elif backend=='groq':model=GroqBackend(cache=True)
                     report=analyze(rows,frames,system=payload.get('system','multi'),backend=backend,model_backend=model,
-                        seed=int(payload.get('seed',42)),window_minutes=float(payload.get('window_minutes',15)))
+                        seed=int(payload.get('seed',42)),window_minutes=float(payload.get('window_minutes',15)),
+                        generation_mode=payload.get('generation_mode','template'),critic_mode=payload.get('critic_mode','numeric'),
+                        tci_model=payload.get('tci_model'))
                     return self.send(200,{'report':report,'markdown':markdown(report)})
                 finally:lock.release()
             except (ValueError,TypeError,KeyError) as exc:return self.send(400,{'error':str(exc)})

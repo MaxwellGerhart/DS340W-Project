@@ -27,3 +27,25 @@ jobs:
       - run: python -m unittest discover -s tests -v
       - run: python -m beyond_possession analyze --output artifacts/smoke
 
+  approach-ui-and-service:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: beyond-possession
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m beyond_possession analyze --system single --output artifacts/ui-check
+      - run: node tests/check_frontend.cjs beyond_possession/static/app.js artifacts/ui-check/report.json
+      - run: node scripts/test-worker.mjs
+        working-directory: beyond-possession/hosted_ai_service
+      - run: bash scripts/build.sh
+        working-directory: beyond-possession/hosted_ai_service
+      - run: node scripts/validate-artifact.mjs
+        working-directory: beyond-possession/hosted_ai_service
+

@@ -78,3 +78,18 @@ class SharedBackend:
                            'input_tokens': usage.get('input_tokens'), 'output_tokens': usage.get('output_tokens'),
                            'cached': result.get('cached') is True})
         return claims
+
+    def generate_task(self, task, payload, seed):
+        if task not in {'write', 'review'}:
+            raise ValueError('Unsupported shared soccer task.')
+        start = time.monotonic()
+        result = self._request('/api/'+task, {**payload, 'seed': seed}, authenticated=True)
+        key = 'claims' if task == 'write' else 'decisions'
+        if not isinstance(result.get(key), list) or len(result[key]) > 8:
+            raise CloudAIError('Shared Gemini returned an invalid '+task+' response.')
+        usage = result.get('usage') or {}
+        self.calls.append({'role': payload.get('role', 'tactical_critic')+'_'+task,
+            'model': result.get('model', self.model), 'seconds': time.monotonic()-start,
+            'input_tokens': usage.get('input_tokens'), 'output_tokens': usage.get('output_tokens'),
+            'cached': result.get('cached') is True})
+        return {key: result[key]}

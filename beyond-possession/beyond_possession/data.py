@@ -38,6 +38,15 @@ def validate_events(rows):
         if missing:
             raise DataError(f'Row {i}: missing columns {sorted(missing)}.')
         row = {key: raw[key] for key in EVENT_FIELDS}
+        # Optional provider xG is a training label, never an inferred statistic.
+        if raw.get('xg') not in (None, ''):
+            if isinstance(raw['xg'], bool):
+                raise DataError(f'Row {i}: xg must be between 0 and 1.')
+            xg = number(raw['xg'], 'xg')
+            if not 0 <= xg <= 1 or (raw['type'] not in {'shot', 'goal'} and xg != 0):
+                raise DataError(f'Row {i}: xg must be between 0 and 1 and belongs on shots/goals only.')
+            if raw['type'] in {'shot', 'goal'}:
+                row['xg'] = xg
         for key in ['match_id', 'event_id', 'team', 'player', 'receiver', 'type', 'outcome']:
             row[key] = str(row[key]).strip()
         if not all(row[k] for k in ['match_id', 'event_id', 'team', 'player']):

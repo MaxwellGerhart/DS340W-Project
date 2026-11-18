@@ -46,8 +46,34 @@ try {
  assert.equal(response.status,401);
  response=await worker.fetch(request('/api/session',{},null,'fixture-other',{'origin':'https://unrelated.example'}),env);
  assert.equal(response.status,403);
+ const narrative={...claim,text:'Team A recorded TCI 50.',evidence_ids:[item.evidence_id],numbers:[{quote:'50',evidence_id:item.evidence_id,field:'value'}]};
+ const upstream=[];
+ globalThis.fetch=async(url,init)=>{
+  calls++;const body=JSON.parse(init.body);upstream.push({url,body});
+  assert.equal(init.headers['x-goog-api-key'],env.GEMINI_API_KEY);
+  const reviewing='decisions' in body.generationConfig.responseJsonSchema.properties;
+  const output=reviewing?{decisions:[{claim_id:'claim-001',verdict:'pass',reason:'Supported descriptive observation.'}]}:{claims:[narrative]};
+  return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(output)}]}}]});
+ };
+ const write={role:'single_analyst',evidence:[item],feedback:[],seed:42};
+ response=await worker.fetch(request('/api/write',write,session.token,'research-fixture'),env);
+ assert.equal(response.status,200);assert.deepEqual((await response.json()).claims,[narrative]);
+ assert.match(upstream[0].body.systemInstruction.parts[0].text,/EVERY occurrence/);
+ response=await worker.fetch(request('/api/write',write,session.token,'research-fixture'),env);
+ assert.equal((await response.json()).cached,true);
+ const review={role:'tactical_critic',seed:42,evidence:[{...item,sample_count:40,sample_unit:'team events',definition:'Provisional TCI.'}],claims:[{claim_id:'claim-001',text:narrative.text,evidence_id:item.evidence_id,evidence_ids:[item.evidence_id],value:50}]};
+ response=await worker.fetch(request('/api/review',review,session.token,'research-fixture'),{...env,GEMINI_CRITIC_MODEL:'gemini-fixture-reviewer'});
+ assert.equal(response.status,200);assert.equal((await response.json()).decisions[0].verdict,'pass');
+ assert.match(upstream[1].url,/gemini-fixture-reviewer/);
+ assert.match(upstream[1].body.systemInstruction.parts[0].text,/WHOLE proposed report/);
+ response=await worker.fetch(request('/api/write',{...write,role:'arbitrary_chat'},session.token),env);assert.equal(response.status,400);
+ response=await worker.fetch(request('/api/review',{...review,claims:[{...review.claims[0],evidence_id:'invented'}]},session.token),env);assert.equal(response.status,400);
+ response=await worker.fetch(request('/api/write',{...write,feedback:[{reason:'x',claim:{text:'x'.repeat(5000)}}]},session.token),env);assert.equal(response.status,400);
+ response=await worker.fetch(request('/api/write',write,session.token+'tamper'),env);assert.equal(response.status,401);
+ globalThis.fetch=async()=>Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:'{"decisions":[]}'}]}}]});
+ response=await worker.fetch(request('/api/review',{...review,seed:44},session.token,'research-fixture'),env);assert.equal(response.status,502);
  globalThis.fetch=async()=>Response.json({error:{message:'Busy '+env.GEMINI_API_KEY}},{status:503});
  response=await worker.fetch(request('/api/select',{role:'single_analyst',evidence:[item],seed:43},session.token),env);
  assert.equal(response.status,503);assert.ok(!(await response.text()).includes(env.GEMINI_API_KEY));
- console.log('Worker checks passed: anonymous scoped sessions, key isolation, request validation, tamper rejection, caching and provider errors.');
+ console.log('Worker checks passed: scoped sessions, key isolation, bounded writing/review, missing critic verdicts, fixed prompts, optional critic model, validation, tamper rejection, cache isolation and provider errors.');
 } finally {globalThis.fetch=originalFetch;}

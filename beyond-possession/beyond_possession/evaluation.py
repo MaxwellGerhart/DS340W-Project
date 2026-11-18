@@ -18,6 +18,8 @@ def automatic_scores(report):
     unique={c['evidence']['evidence_id'] for c in claims}
     # No automatic tactical validity or contradiction score is invented.
     return {'claim_count':len(claims),'numerical_faithfulness':faithful/len(claims) if claims else None,
+            'narrative_numeric_faithfulness':sum(c.get('number_check',{}).get('passed',False) for c in claims)/len(claims) if claims and report['analysis'].get('generation_mode')=='free' else None,
+            'ai_critic_rejections':sum(d['verdict']=='fail' for d in report['analysis'].get('ai_decisions',[])),
             'reference_coverage':supported/len(claims) if claims else None,
             'unique_evidence_count':len(unique),'agent_role_count':len(categories),
             'rejected_candidates':len(report['analysis']['rejected']),
@@ -26,10 +28,14 @@ def automatic_scores(report):
             'output_tokens':sum(c.get('output_tokens') or 0 for c in report['analysis']['model_calls']),
             'tactical_validity':None,'contradiction_rate':None,'cost_usd':None}
 
-def run_experiment(rows,tracking,directory,backend='offline',repeats=2,seed=42,systems=None,model_backend_factory=None,final_validation=False):
+def run_experiment(rows,tracking,directory,backend='offline',repeats=2,seed=42,systems=None,model_backend_factory=None,final_validation=False,
+                   generation_mode='template',critic_mode='numeric',tci_model=None,compare_approaches=False):
     check_match_access(rows,final_validation=final_validation)
     if not 1<=repeats<=20:raise ValueError('Repeats must be between 1 and 20.')
-    systems=systems or CONFIGS
+    if compare_approaches and backend=='offline' and not model_backend_factory:raise ValueError('Approach comparison needs a real AI backend; offline rules cannot simulate AI writing or review.')
+    systems=systems or (['single'] if compare_approaches else CONFIGS)
+    approaches=[('original','template','numeric'),('ai_critic','template','ai'),('hybrid_critic','template','hybrid'),
+                ('free_writing','free','numeric'),('combined','free','hybrid')] if compare_approaches else [('configured',generation_mode,critic_mode)]
     if any(s not in CONFIGS for s in systems):raise ValueError('Unknown experimental system.')
     target=Path(directory)
     if target.exists() and any(target.iterdir()):raise ValueError('Use a new or empty experiment directory to preserve previous runs.')
@@ -38,14 +44,17 @@ def run_experiment(rows,tracking,directory,backend='offline',repeats=2,seed=42,s
     private=target/'private';private.mkdir()
     records=[];mapping={};review_rows=[];sets={}
     rng=random.Random(seed)
-    jobs=[(repeat,system) for repeat in range(repeats) for system in systems]
+    jobs=[(repeat,system,approach,writing,checking) for repeat in range(repeats) for system in systems for approach,writing,checking in approaches]
     rng.shuffle(jobs)
-    for index,(repeat,system) in enumerate(jobs,1):
+    for index,(repeat,system,approach,writing,checking) in enumerate(jobs,1):
         code=f'R{index:03}'
-        config={'system':system,'repeat':repeat,'backend':backend,'seed':seed+repeat}
+        config={'system':system,'repeat':repeat,'backend':backend,'seed':seed+repeat,
+                'approach':approach,'generation_mode':writing,'critic_mode':checking}
         try:
             model=model_backend_factory() if model_backend_factory and system!='baseline' else None
-            report=analyze(rows,tracking,system=system,backend=backend,seed=seed+repeat,model_backend=model,final_validation=final_validation)
+            report=analyze(rows,tracking,system=system,backend=backend,seed=seed+repeat,model_backend=model,final_validation=final_validation,
+                generation_mode=writing,critic_mode=checking,tci_model=tci_model,
+                window_minutes=tci_model['window_minutes'] if tci_model else 15)
             (private/f'{code}.json').write_text(json.dumps(report,indent=2,allow_nan=False))
             mapping[code]={**config,'data_sha256':report['data_sha256'],'run_id':report['run_id']}
             # No system name, backend, role, hash, latency, or critic label in the reviewer packet.
@@ -57,7 +66,7 @@ def run_experiment(rows,tracking,directory,backend='offline',repeats=2,seed=42,s
             (review/f'{code}.md').write_text('\n'.join(content)+'\n')
             scores=automatic_scores(report)
             records.append({'review_id':code,**config,'status':'ok',**scores})
-            sets.setdefault(system,[]).append({c['evidence']['evidence_id'] for c in report['analysis']['claims']})
+            sets.setdefault(approach+'/'+system if compare_approaches else system,[]).append({c['evidence']['evidence_id'] for c in report['analysis']['claims']})
             for reviewer in ['reviewer_1','reviewer_2','reviewer_3']:
                 review_rows.append({'review_id':code,'reviewer_id':reviewer,'tactical_validity_1to5':'',
                     'usefulness_1to5':'','insight_diversity_1to5':'','contradiction_count':'','notes':''})

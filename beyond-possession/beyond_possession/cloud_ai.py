@@ -29,6 +29,12 @@ def compact_evidence(evidence, limit=24):
         if context is not None:
             record['context']={k:context[k] for k in ['score_at_start','red_cards_at_start'] if k in context}
         groups.setdefault((item.get('team'),item.get('start'),item.get('end')),[]).append(record)
+    # Rotate the starting metric across intervals. Taking the first metric in
+    # every group otherwise fills the entire budget with action/territory share.
+    for index, group in enumerate(groups):
+        items=groups[group]
+        offset=index%len(items)
+        groups[group]=items[offset:]+items[:offset]
     selected=[]
     while len(selected)<limit:
         added=False
@@ -43,7 +49,7 @@ class CloudAIError(RuntimeError):
 def load_environment(path=None):
     """Minimal dotenv reader: known variables only, never executes file content."""
     path=Path(path) if path else Path(__file__).resolve().parents[1]/'.env'
-    allowed={'GEMINI_API_KEY','GOOGLE_API_KEY','GEMINI_MODEL','SHARED_AI_BASE_URL','GROQ_API_KEY','GROQ_MODEL','AI_PROVIDER','OLLAMA_MODEL','OLLAMA_BASE_URL'}
+    allowed={'GEMINI_API_KEY','GOOGLE_API_KEY','GEMINI_MODEL','GEMINI_CRITIC_MODEL','SHARED_AI_BASE_URL','GROQ_API_KEY','GROQ_MODEL','AI_PROVIDER','OLLAMA_MODEL','OLLAMA_BASE_URL'}
     if not path.is_file():return
     for line in path.read_text(encoding='utf-8-sig').splitlines():
         line=line.strip()
@@ -58,6 +64,10 @@ def key_present():
     return bool(value) and value not in {'your_key_here','paste_your_key_here','gsk_your_key_here'}
 
 class GroqBackend:
+    def generate_task(self, task, payload, seed):
+        from .model_tasks import request_task
+        return request_task(self, 'groq', task, payload, seed)
+
     def __init__(self, cache=False):
         load_environment()
         if not key_present():

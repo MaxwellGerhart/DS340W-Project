@@ -12,6 +12,7 @@ from .gemini_ai import GeminiBackend
 from .shared_ai import SharedBackend
 from .matches import EXPECTED_FILES, write_catalog
 from .dataset_splits import write_match_splits
+from .tci_learning import fit_tci, evaluate_tci
 
 def main():
     load_environment()
@@ -31,6 +32,12 @@ def main():
     split.add_argument('--ratios',type=float,nargs=3,default=[.7,.2,.1],metavar=('TRAIN','TEST','VALIDATION'))
     gen=sub.add_parser('demo',help='Write reproducible synthetic events and tracking')
     gen.add_argument('--output',default='data/demo');gen.add_argument('--seed',type=int,default=42)
+    for name in ['train-tci','test-tci']:
+        p=sub.add_parser(name,help='Learn TCI from Training xG labels' if name=='train-tci' else 'Compare learned and fixed TCI on disjoint Test matches')
+        p.add_argument('--events',required=True,help='Normalized multi-match event JSON or CSV with xg on every shot/goal')
+        p.add_argument('--output',default='artifacts/tci-model.json' if name=='train-tci' else 'artifacts/tci-test.json')
+        if name=='train-tci':p.add_argument('--window',type=float,default=15)
+        else:p.add_argument('--model',required=True)
     for command in ['analyze','evaluate']:
         p=sub.add_parser(command)
         p.add_argument('--events',help='Normalized event CSV or JSON; omit for synthetic demo')
@@ -40,14 +47,27 @@ def main():
         p.add_argument('--seed',type=int,default=42)
         p.add_argument('--final-validation',action='store_true',help='Explicitly unlock final unseen matches after development is frozen')
         p.add_argument('--output',default='artifacts/'+command)
+        p.add_argument('--writing',choices=['template','free'],default='template')
+        p.add_argument('--critic',choices=['numeric','ai','hybrid'],default='numeric')
+        p.add_argument('--tci-model',help='Learned TCI model JSON; omit to retain the original weights')
         if command=='analyze':
             p.add_argument('--system',choices=['baseline','single','multi','no_critic','no_game_state','no_specialists'],default='multi')
             p.add_argument('--window',type=float,default=15)
             p.add_argument('--database',help='Optional SQLite history file')
         else:
             p.add_argument('--repeats',type=int,default=2)
+            p.add_argument('--compare-approaches',action='store_true',help='Blind comparison of original, AI-only/hybrid critics, free writing and combined approach (single analyst)')
     args=parser.parse_args()
     try:
+        if args.command in {'train-tci','test-tci'}:
+            path=Path(args.events);text=path.read_text(encoding='utf-8-sig')
+            rows=parse_json_events(text) if path.suffix.lower()=='.json' else parse_csv(text)
+            result=fit_tci(rows,args.window) if args.command=='train-tci' else evaluate_tci(json.loads(Path(args.model).read_text()),rows)
+            output=Path(args.output)
+            if output.exists():raise ValueError('Use a new output path to preserve previous TCI artifacts.')
+            output.parent.mkdir(parents=True,exist_ok=True);output.write_text(json.dumps(result,indent=2,allow_nan=False)+'\n')
+            print('Saved '+str(output)+'. Validation was not opened.')
+            return
         if args.command=='doctor':
             providers={'shared':SharedBackend,'gemini':GeminiBackend,'groq':GroqBackend,'ollama':OllamaBackend}
             result=providers[args.backend]().check_ready() if args.backend!='offline' else {'available':True,'provider':'Built-in analysis','model':None}
@@ -77,12 +97,15 @@ def main():
             if not rows:raise ValueError('No rows for requested match.')
             frames=json.loads(Path(args.tracking).read_text()) if args.tracking else []
         else:rows,frames=demo(args.seed)
+        tci_model=json.loads(Path(args.tci_model).read_text()) if args.tci_model else None
         if args.command=='analyze':
-            report=analyze(rows,frames,system=args.system,backend=args.backend,seed=args.seed,window_minutes=args.window,final_validation=args.final_validation)
+            report=analyze(rows,frames,system=args.system,backend=args.backend,seed=args.seed,window_minutes=args.window,final_validation=args.final_validation,
+                generation_mode=args.writing,critic_mode=args.critic,tci_model=tci_model)
             save_report(report,args.output,args.database)
             print(f"Report saved to {args.output}; {len(report['analysis']['claims'])} observations.")
         else:
-            result=run_experiment(rows,frames,args.output,args.backend,args.repeats,args.seed,final_validation=args.final_validation)
+            result=run_experiment(rows,frames,args.output,args.backend,args.repeats,args.seed,final_validation=args.final_validation,
+                generation_mode=args.writing,critic_mode=args.critic,tci_model=tci_model,compare_approaches=args.compare_approaches)
             failures=sum(r['status']=='error' for r in result['records'])
             print(f'Experiment saved to {args.output}; {failures} failed runs. Human scores are intentionally blank.')
             if failures:raise SystemExit(1)
