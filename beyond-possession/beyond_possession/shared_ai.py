@@ -82,18 +82,18 @@ class SharedBackend:
         return claims
 
     def generate_task(self, task, payload, seed):
-        if task not in {'write', 'review'}:
+        if task not in {'write', 'review', 'outlook'}:
             raise ValueError('Unsupported shared soccer task.')
         start = time.monotonic()
         result = self._request('/api/'+task, {**payload, 'seed': seed}, authenticated=True)
-        key = 'claims' if task == 'write' else 'decisions'
+        key = 'claims' if task == 'write' else 'decisions' if task == 'review' else 'recommendations'
         if not isinstance(result.get(key), list) or len(result[key]) > 8:
             raise CloudAIError('Shared Gemini returned an invalid '+task+' response.')
         usage = result.get('usage') or {}
-        if task=='write':self.model=result.get('model') or self.model
+        if task in {'write','outlook'}:self.model=result.get('model') or self.model
         self.calls.append({'role': payload.get('role', 'tactical_critic')+'_'+task,
             'model': result.get('model', self.model), 'seconds': time.monotonic()-start,
             'input_tokens': usage.get('input_tokens'), 'output_tokens': usage.get('output_tokens'),
             'http_attempts': result.get('http_attempts',0 if result.get('cached') else 1),
             'cached': result.get('cached') is True})
-        return {key: result[key]}
+        return {key:result[key],'summary':result.get('summary'),'evidence_ids':result.get('evidence_ids')} if task=='outlook' else {key:result[key]}

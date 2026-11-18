@@ -3,6 +3,24 @@ const $=id=>document.getElementById(id);
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let sessionToken='',current=null,reportMarkdown='',matchCatalog=null,savedMatchesAvailable=false,setupMessage='';
 let learnedModel=null;
+let currentHandle='';
+const outlookPending=new Set(),outlookErrors=new Map();
+const metricNames={tci:'Tactical control index',action_share:'Action share',territory_share:'Attacking territory',progressive_pass_rate:'Progressive passing',completion_rate:'Pass completion',shot_share:'Shot share',network_density:'Passing network density',hub_share:'Receiving concentration',pressure_per100:'Pressure frequency',recovery_high_rate:'High recoveries',spatial_control:'Overall space control',central_control:'Central space control',defensive_width_m:'Team width',defensive_depth_m:'Team depth'};
+const glossary={
+ tci:'An experimental control score combining territory, forward passing, completion and shots. A higher score reflects more control by this definition; it has not been validated as a win predictor.',
+ action_share:'Your team’s share of recorded on-ball actions. This counts actions rather than possession time.',
+ territory_share:'Your team’s share of both teams’ actions starting in their own attacking third.',
+ progressive_pass_rate:'Completed passes advancing at least a tenth of the pitch length, divided by all attempted passes.',
+ completion_rate:'Completed passes divided by attempted passes. High completion alone does not establish attacking progress.',
+ shot_share:'Your team’s share of recorded shots and goals. It counts attempts, without measuring their quality.',
+ network_density:'How many directed passing connections were used out of the possible connections among observed passing players.',
+ hub_share:'The largest share of completed passes received by a single player. It shows concentration, which can be useful or limiting depending on context.',
+ pressure_per100:'Recorded pressure events per hundred opponent pass attempts. It measures frequency, not pressing success or PPDA.',
+ recovery_high_rate:'The share of your team’s ball recoveries occurring in its attacking third.',
+ spatial_control:'Average distance-based control across the pitch grid. Requires player tracking and describes a geometric estimate.',
+ central_control:'The same spatial estimate in the central part of the attacking third. Requires tracking.',
+ defensive_width_m:'Average side-to-side spread of outfield players in meters. It is calculated across observed phases, not only defending.',
+ defensive_depth_m:'Average front-to-back spread of outfield players in meters. Player proximity to goal is used to exclude the goalkeeper.'};
 const nice=k=>k.replaceAll('_',' ');
 const metricValue=(k,v)=>v==null?'Unavailable':k==='tci'?v.toFixed(2):k.endsWith('_m')?v.toFixed(2)+' m':k==='pressure_per100'?v.toFixed(2):(v*100).toFixed(1)+'%';
 const svg=(content,w=640,h=300)=>`<svg viewBox="0 0 ${w} ${h}" role="img">${content}</svg>`;
@@ -31,8 +49,8 @@ function render(){
  const w=s.windows.find(w=>w.team===team&&w.start===start);if(!w)return;
  const m=w.metrics;
  $('tci-note').textContent=s.tci_model?.kind==='learned'?`Learned weights · Model ${s.tci_model.model_id.slice(0,12)} · Target: next 15-minute xG share. This does not establish tactical validity.`:'Original fixed weights: territory 30%, progression 25%, completion 20%, shots 25%.';
- $('metrics').innerHTML=[['tci','Tactical control index','Experimental score out of 100'],['action_share','Action share','Recorded actions, not possession time'],['progressive_pass_rate','Progressive passing','Completed progressive / attempted'],['central_control','Central spatial control',w.n_frames+' full snapshots in interval']].map(([key,title,note])=>`<div class="metric"><div class="label">${title}</div><div class="value">${metricValue(key,m[key])}</div><small>${note}</small></div>`).join('');
- $('score-context').textContent=`Score at interval start: ${w.contexts.score_at_start.join(' : ')} · ${w.n_events} team events`;
+ $('metrics').innerHTML=[['tci','Tactical control index'],['action_share','Action share'],['progressive_pass_rate','Progressive passing'],['central_control','Central space control']].map(([key,title])=>`<div class="metric"><div class="label">${title}</div><div class="value">${metricValue(key,m[key])}</div><small>${esc(glossary[key])}</small></div>`).join('');
+ $('score-context').textContent=`Score when this interval began: ${w.contexts.score_at_start.join(' : ')} · ${w.n_events} recorded team events`;
  $('components').innerHTML=Object.entries(s.tci_weights).map(([k,v])=>`<div class="component"><div class="component-title">${nice(k)} <span>${metricValue(k,m[k])}</span></div><div class="bar"><i style="width:${Math.max(0,Math.min(100,(m[k]||0)*100))}%"></i></div><small>${Math.round(v*100)}% of index</small></div>`).join('');
  let net=w.network,nodes=Object.fromEntries(net.nodes.map(n=>[n.id,n]));
  let lines=net.edges.map(e=>{let x=nodes[e.source],y=nodes[e.target];return `<line x1="${10+x.x*6.2}" y1="${400-x.y*3.9}" x2="${10+y.x*6.2}" y2="${400-y.y*3.9}" stroke="#d4ed88" stroke-opacity=".28" stroke-width="${Math.min(8,1+e.count*.7)}"><title>${esc(e.source)} → ${esc(e.target)}: ${e.count}</title></line>`}).join('');
@@ -44,16 +62,19 @@ function render(){
  let claims=a.claims.filter(c=>c.evidence.team===team&&c.evidence.start===start);
  $('claim-count').textContent=claims.length+' FINDINGS IN THIS INTERVAL';
  $('patterns').innerHTML=(s.patterns||[]).filter(p=>p.team===team&&p.start===start).map(p=>`<article class="claim"><div class="claim-role">Calculated comparison</div><div><p>${esc(p.text)}</p><small>${esc(p.warning)} Evidence: ${esc(p.evidence_ids.join(', '))}</small></div></article>`).join('');
- $('claims').innerHTML=claims.length?claims.map(c=>`<article class="claim"><div class="claim-role">${esc(nice(c.agent))}</div><div><p>${esc(c.text)}<span class="badge ${c.verification==='unchecked'?'unchecked':''}">${esc(c.verification)}</span></p><small>${esc(c.alternative_explanation)}</small><small>Evidence ${esc(c.evidence.evidence_id)} · ${c.evidence.sample_count} ${esc(c.evidence.sample_unit)} · Examples: ${esc(c.evidence.supporting_events.join(', '))}</small><details><summary>How this was calculated</summary><p>${esc(c.evidence.definition)}</p><p>${esc(c.review_note)}</p></details></div></article>`).join(''):'<p class="empty">No accepted observations for this selection. See critic review or choose another interval.</p>';
+ const badges={verified:'Numbers checked',numeric_and_ai_reviewed:'Numbers + AI review',ai_reviewed:'AI reviewed',unchecked:'Unchecked'};
+ $('claims').innerHTML=claims.length?claims.map(c=>`<article class="claim"><div class="claim-role">${esc(nice(c.agent))}</div><div><p>${esc(c.text)}<span class="badge ${c.verification==='unchecked'?'unchecked':''}">${esc(badges[c.verification]||c.verification)}</span></p><small>Alternative explanation: ${esc(c.alternative_explanation)}</small><small>Evidence ${esc(c.evidence.evidence_id)} · ${c.evidence.sample_count} ${esc(c.evidence.sample_unit)} · Example source records: ${esc(c.evidence.supporting_events.join(', '))}</small><details><summary>How this was calculated</summary><p>${esc(c.evidence.definition)}</p><p>${esc(c.review_note)}</p></details></div></article>`).join(''):'<p class="empty">No accepted observations for this selection. See critic review or choose another interval.</p>';
  $('agent-trace').innerHTML=a.trace.map(t=>`<span title="${esc(t.action)}">${esc(nice(t.agent))}</span>`).join('');
  $('rejected-label').textContent=`Critic review · ${a.rejected.length} rejected candidates across the match`;
  $('rejected').innerHTML=a.rejected.length?a.rejected.map(r=>`<p>${esc(r.agent)}: ${esc(r.reason)}</p>`).join(''):'<p>No findings were flagged. The football interpretation still needs a human review.</p>';
- $('raw-metrics').innerHTML='<table><thead><tr><th>Metric</th><th>Value</th><th>Definition</th></tr></thead><tbody>'+Object.entries(s.metric_definitions).map(([k,d])=>`<tr><td>${esc(nice(k))}</td><td>${metricValue(k,m[k])}</td><td>${esc(d)}</td></tr>`).join('')+'</tbody></table>';
+ $('raw-metrics').innerHTML='<table><thead><tr><th>Metric</th><th>Value</th><th>What it means</th></tr></thead><tbody>'+Object.entries(s.metric_definitions).map(([k,d])=>`<tr><td>${esc(metricNames[k]||nice(k))}</td><td>${metricValue(k,m[k])}</td><td>${esc(glossary[k]||d)}</td></tr>`).join('')+'</tbody></table>';
+ renderOutlook();
 }
 async function run(event){
  if(event)event.preventDefault();$('run').disabled=true;$('run').textContent='Analyzing…';$('message').textContent='Calculating match statistics and preparing findings…';
  try{
- const source=$('source').value;let payload={source,system:$('system').value,backend:$('backend').value,window_minutes:Number($('window').value),seed:42,generation_mode:$('writing').value,critic_mode:$('critic').value};
+ const source=$('source').value;if(source==='matches'){await loadMatches();return;}
+ let payload={source,system:$('system').value,backend:$('backend').value,window_minutes:Number($('window').value),seed:42,generation_mode:$('writing').value,critic_mode:$('critic').value};
  if($('tci-mode').value==='learned'){
   const file=$('tci-model-file').files[0];if(file){if(file.size>1024*1024)throw Error('Learned model JSON must be below 1 MiB.');learnedModel=JSON.parse(await file.text());}
   if(!learnedModel)throw Error('Train TCI weights below or choose a learned model JSON file.');
@@ -65,22 +86,25 @@ async function run(event){
  payload[events.name.toLowerCase().endsWith('.json')?'events_json':'events_csv']=await events.text();payload.match_id=$('match-id').value.trim();
  const tracking=$('tracking-file').files[0];if(tracking){if(tracking.size>20*1024*1024)throw Error('Tracking JSON must be below 20 MiB.');payload.tracking_json=await tracking.text()}
  }
- if(source==='matches'){await loadMatches();return;}
  const response=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json','X-Session-Token':sessionToken},body:JSON.stringify(payload)});
  const data=await response.json();if(!response.ok)throw Error(data.error||'Analysis failed.');
- current=data.report;reportMarkdown=data.markdown;$('results').hidden=false;$('catalog-results').hidden=true;
+ current=data.report;currentHandle=data.report_handle||'';reportMarkdown=data.markdown;$('results').hidden=false;$('catalog-results').hidden=true;
  $('match-title').textContent=current.summary.teams.join(' vs ');
  $('run-label').textContent=`${current.summary.match_id} / ${current.analysis.system} / ${current.analysis.backend}${current.analysis.model?' / '+current.analysis.model:''} / Run ${current.run_id}`;
  $('team').innerHTML=current.summary.teams.map(t=>`<option>${esc(t)}</option>`).join('');
  $('interval').innerHTML=current.summary.windows.filter(w=>w.team===current.summary.teams[0]).map(w=>`<option value="${w.start}">${(w.start/60).toFixed(0)}–${(w.end/60).toFixed(0)} min</option>`).join('');
+ const ready=(current.outlooks||[]).filter(o=>o.team===current.summary.teams[0]&&o.status==='ready'&&o.selection_end===o.as_of_seconds);
+ if(ready.length)$('interval').value=String(ready.at(-1).selected_interval_start);
  $('source-note').textContent=source==='demo'?'SYNTHETIC DATA · Seed 42 · Workflow demonstration, not a research finding':'UPLOADED DATA · Validate provider mapping and licensing before research use';
- $('message').textContent=`Ready. ${current.analysis.claims.length} observations · ${current.analysis.rejected.length} rejected · ${current.analysis.latency_seconds.toFixed(2)}s · ${(current.analysis.model_calls||[]).filter(c=>!c.cached).length} AI calls · ${(current.analysis.model_calls||[]).filter(c=>c.cached).length} cached responses. ${current.analysis.backend==='offline'?'Offline rules, no LLM called.':''}`;
- $('message').textContent+=` ${(current.analysis.model_calls||[]).reduce((total,c)=>total+(c.cached?0:(c.http_attempts??1)),0)} HTTP generation attempts. Writing: ${current.analysis.generation_mode}. Critic: ${current.analysis.critic_mode}. ${current.analysis.correction_calls||0} correction calls. `+setupMessage;timeline();render();
+ $('message').textContent=`Ready. ${current.analysis.claims.length} accepted findings and ${current.analysis.rejected.length} flagged drafts. Choose a team or interval to explore the results and outlook.`+setupMessage;
+ $('budget-label').textContent=`${current.analysis.latency_seconds.toFixed(2)}s · ${(current.analysis.model_calls||[]).filter(c=>!c.cached).length} AI calls · ${(current.analysis.model_calls||[]).filter(c=>c.cached).length} cached responses · ${(current.analysis.model_calls||[]).reduce((total,c)=>total+(c.cached?0:(c.http_attempts??1)),0)} HTTP generation attempts. Writing: ${current.analysis.generation_mode}. Critic: ${current.analysis.critic_mode}. ${current.analysis.correction_calls||0} content correction calls. Outlook calls are recorded separately.`;
+ timeline();render();
+ if($('auto-outlook').checked&&currentHandle&&current.analysis.backend!=='offline')await requestOutlook();
  }catch(err){$('message').textContent=err.message+' Previous results, if visible, remain from the previous successful run.'}
  finally{$('run').disabled=false;$('run').textContent=$('source').value==='matches'?'Load match files':'Analyze match ↗'}
 }
 function download(name,text,type){let url=URL.createObjectURL(new Blob([text],{type}));let a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-$('source').addEventListener('change',()=>{$('upload').hidden=$('source').value!=='upload';$('match-upload').hidden=$('source').value!=='matches';$('run').textContent=$('source').value==='matches'?'Load match files':'Analyze match ↗';$('message').textContent='';});
+$('source').addEventListener('change',()=>{$('upload').hidden=$('source').value!=='upload';$('match-upload').hidden=$('source').value!=='matches';$('run').textContent=$('source').value==='matches'?'Load match files':'Analyze match ↗';$('message').textContent='';updateHelp();});
 $('controls').addEventListener('submit',run);$('team').addEventListener('change',render);$('interval').addEventListener('change',render);
 $('json-download').onclick=()=>current&&download('beyond-possession-report.json',JSON.stringify(current,null,2),'application/json');
 $('md-download').onclick=()=>current&&download('beyond-possession-report.md',reportMarkdown,'text/markdown');
@@ -109,7 +133,7 @@ $('catalog-download').onclick=()=>matchCatalog&&download(matchCatalog.split_poli
 const sectionLinks=[...document.querySelectorAll('nav a[href^="#"]')];
 function highlightSection(){
  let active='overview';
- for(const id of ['overview','evidence','method']){const section=document.getElementById(id);if(section&&section.getBoundingClientRect().top<=window.innerHeight*.35&&section.getClientRects().length)active=id;}
+ for(const id of ['overview','evidence','outlook','method']){const section=document.getElementById(id);if(section&&section.getBoundingClientRect().top<=window.innerHeight*.35&&section.getClientRects().length)active=id;}
  if(window.scrollY+window.innerHeight>=document.documentElement.scrollHeight-4)active='method';
  for(const link of sectionLinks){const selected=link.getAttribute('href')==='#'+active;link.classList.toggle('active',selected);if(selected)link.setAttribute('aria-current','location');else link.removeAttribute('aria-current');}
 }
@@ -125,10 +149,11 @@ function renderCatalogue(){
 $('catalog-search').addEventListener('input',renderCatalogue);
 
 function configureApproaches(){
- const original=$('backend').value==='offline'||$('system').value==='baseline';
- $('system-note').textContent=({single:'One analyst sees all available metrics. The selected critic can add a separate review call.',multi:'Four specialist roles cover space, passing, defense and game state. More AI calls than Single analyst.',baseline:'Calculated statistics and fixed sentences. No AI calls, regardless of the selected AI backend.',no_critic:'Specialist analysts with number and AI checks deliberately disabled. Findings are unchecked.',no_game_state:'Three specialists without score/card context. Underlying charts and calculated match data remain available.',no_specialists:'One manager analyst sees all metrics. Its current reasoning scope matches Single analyst.'})[$('system').value]||'';
- $('writing').disabled=original;$('critic').disabled=original||$('system').value==='no_critic';
+ const original=$('backend').value==='offline';
+ $('system-note').textContent=$('system').value==='multi'?(original?'Built-in rules group observations into space, passing, defense and game-state roles.':'Four specialist roles examine space, passing, defense and game state. Their findings are combined and checked.'):(original?'Built-in rules consider the available metrics without calling an AI model.':'One analyst sees all available metrics. A separate critic reviews its findings with your selected checks.');
+ $('writing').disabled=original;$('critic').disabled=original;
  if(original){$('writing').value='template';$('critic').value='numeric';}
+ updateHelp();
 }
 $('backend').addEventListener('change',configureApproaches);
 $('system').addEventListener('change',configureApproaches);
@@ -156,3 +181,51 @@ $('train-tci').onclick=async()=>{
  }catch(error){$('training-status').textContent=error.message+' Any previous model/results remain from the previous successful run.';}
  finally{$('train-tci').disabled=false;}
 };
+
+function updateHelp(){
+ $('source-help').textContent=({demo:'A generated match for trying the workflow. Its results are demonstrations.',upload:'Upload recorded passes, shots and other actions to calculate tactical statistics.',matches:'Browse fixture and result records. A catalogue alone cannot produce tactical charts or outlooks.'})[$('source').value]||'';
+ $('backend-help').textContent=({shared:'Uses the project’s online Google service without entering a personal key. Shared usage limits apply.',gemini:'Uses your Google key configured on this computer. Requests go directly to Gemini.',groq:'Uses your configured Groq API key for online AI analysis.',offline:'Uses deterministic rules and calculated statistics. No AI model or internet inference is used.',ollama:'Uses an installed Ollama model on this computer. Local setup is needed.'})[$('backend').value]||'';
+ $('writing-help').textContent=$('writing').value==='free'?'The AI writes original sentences with evidence bindings for every number. Failed drafts get a bounded correction attempt.':'Uses consistent fixed sentences around the selected statistics. This makes wording easier to compare.';
+ $('critic-help').textContent=({hybrid:'Checks values and samples first, then uses a separate AI call to review tactical reasoning and contradictions.',numeric:'Checks evidence references, values and samples. Free-written sentences also receive numeric fact-checking.',ai:'Experimental AI judgment of reasoning. Free writing retains its own number checks; template values are not guaranteed by a numeric gate.'})[$('critic').value]||'';
+ $('weights-help').textContent=$('tci-mode').value==='learned'?'Load or train weights fitted to future xG on separate Training matches. Use the training interval length.':'Uses the documented starting weights. You can analyze ordinary event files without training or xG labels.';
+}
+for(const id of ['writing','critic','tci-mode'])$(id).addEventListener('change',updateHelp);
+$('metric-glossary').innerHTML=Object.entries(glossary).map(([key,definition])=>`<div><dt>${esc(metricNames[key])}</dt><dd>${esc(definition)}</dd></div>`).join('');
+
+function selectedOutlook(){return (current?.outlooks||[]).find(o=>o.team===$('team').value&&o.selected_interval_start===Number($('interval').value));}
+function outlookKey(){return currentHandle+'|'+$('team').value+'|'+$('interval').value;}
+function renderOutlook(){
+ const outlook=selectedOutlook(),key=outlookKey();
+ $('outlook-title').textContent=$('team').value+': outlook & next actions';
+ $('outlook-ai').disabled=true;
+ if(!outlook){
+  $('outlook-basis').textContent='Analyze this match with the updated server to calculate a team outlook.';
+  $('outlook-projections').innerHTML='';$('outlook-priorities').innerHTML='';$('outlook-summary').textContent='';return;
+ }
+ $('outlook-kind').textContent=outlook.ai?'AI EXPLANATION + CALCULATED TREND':'CALCULATED TREND';
+ $('outlook-basis').textContent=`Using ${outlook.history_intervals} complete recent intervals through ${(outlook.as_of_seconds/60).toFixed(1)} minutes. Scenario horizon: ${outlook.horizon_minutes} comparable playing minutes.`;
+ $('outlook-projections').innerHTML=outlook.projections.length?outlook.projections.map(p=>`<article class="projection"><div class="label">${esc(metricNames[p.metric]||nice(p.metric))}</div><div class="projection-value">${metricValue(p.metric,p.estimate)}</div><p>Estimated next phase · ${esc(p.direction)}</p><small>Latest observed ${metricValue(p.metric,p.observed)}<br>Recent range ${metricValue(p.metric,p.recent_min)} to ${metricValue(p.metric,p.recent_max)}</small></article>`).join(''):'<p class="empty">More adjacent complete intervals are needed before calculating a numeric outlook. Choose a later interval if available.</p>';
+ $('outlook-summary').textContent=outlook.ai?.summary||'These priorities follow the selected team’s recent calculated metrics. Expand with AI for a tailored explanation of what may happen next and what to try.';
+ const priorities=outlook.ai?.recommendations||outlook.priorities.slice(0,3);
+ $('outlook-priorities').innerHTML=priorities.map((p,i)=>`<article class="priority"><span class="priority-number">PRIORITY ${i+1}</span><h3>${esc(p.title)}</h3><p>${esc(p.rationale||p.signal)}</p><dl><dt>In the match</dt><dd>${esc(p.match_action)}</dd><dt>At practice</dt><dd>${esc(p.practice_action)}</dd><dt>Monitor next</dt><dd>${esc(p.watch_for)}</dd></dl><small>Cited metrics: ${esc(p.evidence_ids.map(ref=>outlook.evidence.find(e=>e.evidence_id===ref)?.metric||ref).map(k=>metricNames[k]||nice(k)).join(', '))}</small></article>`).join('')||'<p class="empty">There is not enough supported evidence to prioritize match or practice actions yet.</p>';
+ $('outlook-evidence').innerHTML='<p>Only observations at or before the outlook cutoff are used. Changing to an earlier interval removes later evidence.</p><table><thead><tr><th>Metric</th><th>Observed value</th><th>Interval / reference</th></tr></thead><tbody>'+outlook.evidence.map(e=>`<tr><td>${esc(metricNames[e.metric]||nice(e.metric))}</td><td>${metricValue(e.metric,e.value)}</td><td>${(e.start/60).toFixed(1)} to ${(e.end/60).toFixed(1)} min · ${esc(e.evidence_id)}</td></tr>`).join('')+'</tbody></table>';
+ $('outlook-limits').innerHTML='<p>'+esc(outlook.method)+'</p>'+outlook.warnings.map(note=>'<p>'+esc(note)+'</p>').join('');
+ const busy=outlookPending.size>0,canAI=current.analysis.backend!=='offline'&&current.analysis.backend!=='template'&&outlook.status==='ready'&&currentHandle;
+ $('outlook-ai').disabled=busy||!canAI||!!outlook.ai;
+ $('outlook-ai').textContent=busy?'Preparing AI outlook…':outlook.ai?'AI outlook ready':'Expand with AI';
+ $('outlook-status').textContent=outlookErrors.get(key)|| (busy?'Preparing an AI explanation. The calculated estimates remain visible.':outlook.ai?`AI explanation: ${outlook.ai.model}. ${outlook.ai.verification}`:canAI?'Calculated outlook ready. AI expansion adds a model call.':'Calculated guidance is available. AI expansion needs an AI engine and enough recent complete intervals.');
+}
+async function requestOutlook(){
+ const outlook=selectedOutlook(),key=outlookKey(),handle=currentHandle;
+ if(!outlook||outlook.ai||outlook.status!=='ready'||!handle||outlookPending.size||['offline','template'].includes(current.analysis.backend))return;
+ outlookErrors.delete(key);outlookPending.add(key);renderOutlook();
+ try{
+  const response=await fetch('/api/outlook',{method:'POST',headers:{'Content-Type':'application/json','X-Session-Token':sessionToken},body:JSON.stringify({report_handle:handle,team:outlook.team,interval_start:outlook.selected_interval_start})});
+  const result=await response.json();if(!response.ok)throw Error(result.error||'The AI outlook could not be completed.');
+  if(currentHandle!==handle)return;
+  current.outlooks=result.outlooks||current.outlooks.map(o=>o.team===result.outlook.team&&o.selected_interval_start===result.outlook.selected_interval_start?result.outlook:o);
+  reportMarkdown=result.markdown||reportMarkdown;
+ }catch(error){if(currentHandle===handle)outlookErrors.set(key,'AI explanation unavailable: '+error.message+' The displayed trend and rule-based plan remain calculated outputs.');}
+ finally{outlookPending.delete(key);if(currentHandle===handle)renderOutlook();}
+}
+$('outlook-ai').onclick=requestOutlook;

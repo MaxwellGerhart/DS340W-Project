@@ -73,6 +73,22 @@ try {
  response=await worker.fetch(request('/api/write',write,session.token+'tamper'),env);assert.equal(response.status,401);
  globalThis.fetch=async()=>Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:'{"decisions":[]}'}]}}]});
  response=await worker.fetch(request('/api/review',{...review,seed:44},session.token,'research-fixture'),env);assert.equal(response.status,502);
+ const priority={priority_id:'balance',title:'Keep play balanced',signal:'The cited metric supports checking balance.',evidence_ids:[item.evidence_id],match_action:'Review forward support.',practice_action:'Rehearse support.',watch_for:'Watch the trend.'};
+ const coach={role:'manager_analyst',team:item.team,as_of_seconds:900,horizon_minutes:15,evidence:[item],directions:[{metric:'tci',direction:'steady'}],priorities:[priority],seed:42};
+ let coachCalls=0;
+ globalThis.fetch=async(url,init)=>{
+  coachCalls++;const body=JSON.parse(init.body);assert.ok(body.generationConfig.responseJsonSchema.properties.recommendations);
+  const input=JSON.parse(body.contents[0].parts[0].text);assert.equal(input.team,item.team);assert.ok(input.evidence.every(e=>e.end<=input.as_of_seconds));
+  return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({summary:'If patterns continue, the team could retain its current balance.',evidence_ids:[item.evidence_id],recommendations:[{priority_id:'balance',rationale:'The evidence supports checking balance.',match_action:'Review supporting options.',practice_action:'Rehearse support movements.',watch_for:'Watch progression and security.'}]})}]}}]});
+ };
+ response=await worker.fetch(request('/api/outlook',coach,session.token,'coach'),env);
+ assert.equal(response.status,200);assert.equal((await response.json()).recommendations[0].priority_id,'balance');assert.equal(coachCalls,1);
+ response=await worker.fetch(request('/api/outlook',coach,session.token,'coach'),env);assert.equal((await response.json()).cached,true);assert.equal(coachCalls,1);
+ for(const invalid of [{...coach,as_of_seconds:500},{...coach,team:'Other team'},{...coach,priorities:[{...priority,priority_id:'invented_tactic'}]}]){
+  response=await worker.fetch(request('/api/outlook',invalid,session.token,'coach'),env);assert.equal(response.status,400);
+ }
+ globalThis.fetch=async()=>Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({summary:'If play continues, it could change.',evidence_ids:[item.evidence_id],recommendations:[{priority_id:'invented',rationale:'x',match_action:'x',practice_action:'x',watch_for:'x'}]})}]}}]});
+ response=await worker.fetch(request('/api/outlook',{...coach,seed:43},session.token,'coach'),env);assert.equal(response.status,502);
  let retryCalls=0;
  globalThis.setTimeout=(callback)=>originalSetTimeout(callback,0);
  globalThis.fetch=async()=>{retryCalls++;return retryCalls<3?Response.json({error:{message:'Busy'}},{status:503}):Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({claims:[claim]})}]}}]});};

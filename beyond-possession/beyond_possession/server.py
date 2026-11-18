@@ -6,6 +6,7 @@ import os
 import secrets
 import threading
 import tempfile
+from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -19,6 +20,7 @@ from .shared_ai import SharedBackend
 from .matches import combine_matches
 from .dataset_splits import read_manifest, load_development_catalogue, development_view
 from .tci_learning import fit_tci, evaluate_tci
+from .outlook import explain_outlook
 
 STATIC=Path(__file__).parent/'static'
 MAX_BYTES=24*1024*1024
@@ -36,6 +38,7 @@ def serve(host='127.0.0.1',port=8765,on_ready=None):
     load_environment()
     token=secrets.token_urlsafe(32)
     lock=threading.Lock()
+    reports=OrderedDict()
     class Handler(BaseHTTPRequestHandler):
         def send(self,code,body,kind='application/json'):
             if kind=='application/json': body=json.dumps(body,allow_nan=False).encode()
@@ -78,6 +81,25 @@ def serve(host='127.0.0.1',port=8765,on_ready=None):
                 if length<=0 or length>MAX_BYTES:return self.send(413,{'error':'Upload must be between 1 byte and 24 MiB.'})
                 payload=json.loads(self.rfile.read(length))
                 if not isinstance(payload,dict):raise DataError('Expected a JSON object.')
+                if urlparse(self.path).path=='/api/outlook':
+                    handle=payload.get('report_handle')
+                    if not isinstance(handle,str) or handle not in reports:
+                        return self.send(404,{'error':'This analysis is no longer in memory. Analyze the match again.'})
+                    if not lock.acquire(blocking=False):return self.send(409,{'error':'Another analysis or outlook is running. Wait for it to finish.'})
+                    try:
+                        report=reports[handle]
+                        outlook=next((o for o in report['outlooks'] if o['team']==payload.get('team') and o['selected_interval_start']==payload.get('interval_start')),None)
+                        if outlook is None:raise DataError('Choose a team and interval from this analyzed match.')
+                        cached=outlook.get('ai') is not None
+                        if not cached:
+                            backend=report['analysis']['backend']
+                            providers={'shared':SharedBackend,'gemini':lambda:GeminiBackend(cache=True),
+                                       'groq':lambda:GroqBackend(cache=True),'ollama':OllamaBackend}
+                            if backend not in providers:raise DataError('AI outlooks need an AI engine. The calculated outlook is already available.')
+                            outlook=explain_outlook(outlook,providers[backend](),report['config']['seed'])
+                            report['outlooks']=[outlook if o['team']==outlook['team'] and o['selected_interval_start']==outlook['selected_interval_start'] else o for o in report['outlooks']]
+                        return self.send(200,{'outlook':outlook,'outlooks':report['outlooks'],'markdown':markdown(report),'cached':cached})
+                    finally:lock.release()
                 if urlparse(self.path).path=='/api/train-tci':
                     if not lock.acquire(blocking=False):return self.send(409,{'error':'An analysis or training run is already active.'})
                     try:
@@ -123,7 +145,10 @@ def serve(host='127.0.0.1',port=8765,on_ready=None):
                         seed=int(payload.get('seed',42)),window_minutes=float(payload.get('window_minutes',15)),
                         generation_mode=payload.get('generation_mode','template'),critic_mode=payload.get('critic_mode','numeric'),
                         tci_model=payload.get('tci_model'))
-                    return self.send(200,{'report':report,'markdown':markdown(report)})
+                    handle=secrets.token_urlsafe(18)
+                    reports[handle]=report
+                    while len(reports)>3:reports.popitem(last=False)
+                    return self.send(200,{'report':report,'report_handle':handle,'markdown':markdown(report)})
                 finally:lock.release()
             except (ValueError,TypeError,KeyError) as exc:return self.send(400,{'error':str(exc)})
             except Exception as exc:return self.send(502,{'error':str(exc)})

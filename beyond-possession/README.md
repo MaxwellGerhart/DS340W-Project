@@ -1,5 +1,9 @@
 # Beyond Possession
 
+The dashboard shows **Single analyst** and **Specialist analysts**. Research baselines and ablations remain available through the Python API and CLI. Every visible control, chart and result section has short guidance, with a metric dictionary under How it works.
+
+After analysis, choose **Focus team** and **Interval** to see **Team outlook & next actions**. It includes approximate next-phase metric projections, cited match actions, practice ideas and monitoring priorities. The default automatically asks the selected AI engine to expand the initial team outlook. Changing a filter shows the calculated version immediately; **Expand with AI** adds detail for that selection. This extra call can be disabled under Report settings. See [team outlook methods and limits](docs/TEAM_OUTLOOK.md).
+
 The three slide proposals are implemented as selectable approaches: learned TCI weights, numeric/AI/hybrid critics and free-written reports with a bounded numeric correction loop. The dashboard defaults to free writing plus hybrid review for shared Gemini. Weight training needs multi-match event data with provider xG labels; the bundled catalogue and Real Madrid vs Barcelona file cannot fit it as supplied. See [what changed and how to compare it](docs/APPROACH_CHANGES.md).
 
 The real match catalogue now has fixed **70% Training / 20% Test / 10% unseen
@@ -320,7 +324,7 @@ An HTTP 429 can mean a rate limit or exhausted quota. The error includes the sel
 
 This app lives under `beyond-possession/` alongside the existing OpenSTARLab reproduction. Open `beyond-possession/Beyond-Possession.code-workspace` in VS Code, or run `cd beyond-possession` then `python run.py`. The original reproduction remains at the repository root. The shipped match catalogue is gzip-compressed and read automatically.
 
-## What the System modes mean
+## Research systems retained in the CLI and Python API
 
 | Mode | Behavior |
 | --- | --- |
@@ -331,4 +335,4 @@ This app lives under `beyond-possession/` alongside the existing OpenSTARLab rep
 | Ablation: no game state | Three specialists, without the game-state specialist or score/card context in writer/reviewer inputs. Calculated charts/context still exist in the report summary. |
 | Ablation: no specialists | One manager analyst sees all metrics. In this implementation its reasoning scope is effectively the same as Single analyst. |
 
-An ablation deliberately removes a component for a controlled comparison. Use Single analyst with free writing and hybrid review for routine AI reports; use the other modes to compare system designs. Writing, Critic and TCI controls are separate from System, with the explicit baseline/no-critic exceptions above.
+Only Single analyst and Specialist analysts are displayed in the dashboard. The full table above documents the research systems retained in the code. An ablation deliberately removes a component for a controlled comparison. Use Single analyst with free writing and hybrid review for routine AI reports; use the other modes to compare system designs. Writing, Critic and TCI controls are separate from System, with the explicit baseline/no-critic exceptions above.

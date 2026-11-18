@@ -9,6 +9,7 @@ from .analytics import summarize
 from .agents import run_agents
 from .data import fingerprint, validate_events, validate_tracking
 from .dataset_splits import check_match_access
+from .outlook import outlooks
 
 def analyze(rows, tracking=None, *, system='multi', backend='offline', seed=42, window_minutes=15, weights=None, model_backend=None, final_validation=False,
             tci_model=None, generation_mode='template', critic_mode='numeric', critic_model_backend=None):
@@ -33,11 +34,12 @@ def analyze(rows, tracking=None, *, system='multi', backend='offline', seed=42, 
             'critic_mode':result['critic_mode'],'critic_model':result['critic_model']}
     return {'schema_version':'1.0','created_at':datetime.now(timezone.utc).isoformat(),
         'run_id':hashlib.sha256((sha+json.dumps(config,sort_keys=True)).encode()).hexdigest()[:16],
-        'data_sha256':sha,'config':config,'summary':summary,'analysis':result,
+        'data_sha256':sha,'config':config,'summary':summary,'analysis':result,'outlooks':outlooks(summary),
         'limitations':['Synthetic matches demonstrate software behavior only; they cannot establish research findings.',
           'Action share is not time-based possession. TCI is an unvalidated event proxy.',
           'Tracking estimates use smooth distance-based geometry with a 3 m transition scale, not calibrated arrival-time pitch control.',
           'No confidence intervals are computed: adjacent observations are dependent.',
+          'Team outlooks are conditional, untrained trend scenarios. Coaching suggestions need testing; no calibrated match-result probabilities are provided.',
           'No causal claims, inferred fatigue, or passing-lane availability are supported.',
           'Automatic checks measure structural/numeric faithfulness; experts must assess tactical validity.']}
 
@@ -63,6 +65,32 @@ def markdown(report):
         lines.extend(['','## Descriptive interval comparisons',''])
         for pattern in summary['patterns']:
             lines.extend(['- '+pattern['text'],'  Evidence: '+', '.join(pattern['evidence_ids'])+'. '+pattern['warning']])
+    available=report.get('outlooks',[])
+    latest={}
+    outlook_order=lambda o:(o['as_of_seconds'],bool(o.get('ai')),o['selection_end']==o['as_of_seconds'])
+    for outlook in available:
+        if outlook['status']=='ready' and (outlook['team'] not in latest or outlook_order(outlook)>outlook_order(latest[outlook['team']])):
+            latest[outlook['team']]=outlook
+    if latest:
+        lines.extend(['','## Team outlooks and actions','',
+            'Conditional trend scenarios only. No win odds or guaranteed scores. Recent ranges are historical variation, not prediction intervals.',''])
+        display=list(latest.values())
+        shown={(o['team'],o['selected_interval_start']) for o in display}
+        display.extend(o for o in available if o.get('ai') and (o['team'],o['selected_interval_start']) not in shown)
+        for outlook in display:
+            team=outlook['team']
+            lines.append(f"### {team}: data through {outlook['as_of_seconds']/60:g} minutes")
+            lines.append(outlook['method'])
+            for projection in outlook['projections']:
+                from .agents import format_value
+                lines.append('- '+projection['metric'].replace('_',' ')+': estimated '+format_value(projection['metric'],projection['estimate'])+'; evidence '+', '.join(projection['evidence_ids']))
+            ai=outlook.get('ai')
+            if ai:lines.extend(['', 'AI outlook ('+str(ai['model'])+'): '+ai['summary']])
+            for priority in (ai['recommendations'] if ai else outlook['priorities'][:3]):
+                lines.extend(['- '+priority['title']+': '+priority.get('rationale',priority['signal']),
+                    '  Match action: '+priority['match_action'],'  Practice: '+priority['practice_action'],
+                    '  Monitor: '+priority['watch_for'],'  Evidence: '+', '.join(priority['evidence_ids'])])
+            lines.append('')
     lines.extend(['','## Rejected candidates','',str(len(analysis['rejected'])),'','## Limitations',''])
     lines.extend('- '+s for s in report['limitations'])
     return '\n'.join(lines)+'\n'

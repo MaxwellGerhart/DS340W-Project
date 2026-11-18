@@ -65,3 +65,13 @@ Free-written prose is checked using extracted numeric tokens and declared field 
 - The run ID fingerprints data and configuration, not the model output. Store timestamps and full reports to distinguish repeated nondeterministic runs.
 
 Groq API budget policy: at most 24 metric records per model call, balanced across team/interval groups; only compact score/card context is included. Default dashboard system is single analyst. The full multi configuration is still four separate role calls, with immediate stop on any failure. One-hour in-memory response caching is enabled only in dashboard requests, never CLI experiments. This policy is included in analysis metadata.
+
+## Team outlooks and dashboard controls
+
+The dashboard exposes only single and multi analyst systems. CONFIGS, CLI choices and research evaluation configurations retain all six original systems. Inline help, an optional report-settings group, metric definitions and a team-outlook section explain the visible interface.
+
+Analysis also calculates per-team/per-interval outlook snapshots without additional inference. These use at most three adjacent eligible complete historical windows and never use later windows. Each core fraction uses a recency-weighted mean plus a half-strength endpoint trend, clipped to [0,1]; projected TCI is recomputed from the selected component weights. Recent minima/maxima are historical ranges, not prediction intervals. These are untrained scenario estimates, separate from future-xG weight training.
+
+A separate optional AI task explains the selected snapshot and prioritizes a bounded library of cited coaching hypotheses. It cannot create numeric forecasts or new priority IDs; generated prose with numeric claims, unknown references or explicit guarantees is rejected. Its reasoning is not automatically proven by those checks. The AI task is outside the core analyst/critic experiment budget and is recorded in the outlook's own model_calls. Normal dashboard analysis can request it automatically for the initial selection; filter changes alone never call AI.
+
+The local server stores at most three successful reports behind per-launch opaque handles. The outlook endpoint accepts only a stored handle, team and interval, rather than a client-supplied summary. Successful AI results are reused for that selection, and exports include their provenance. The shared Worker accepts a scoped /api/outlook task with bounded past-only team evidence, forecast direction labels and predefined priorities.
